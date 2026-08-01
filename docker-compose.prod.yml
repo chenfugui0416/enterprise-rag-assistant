@@ -1,0 +1,32 @@
+# 生产覆盖层（ADR-0002：单机 VPS + Docker Compose）。
+# 用法：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 与开发编排的差异：
+#   1. 数据库与 Redis 不再对公网暴露端口，只走内部网络；
+#   2. 应用以 APP_ENV=production 运行，关闭 /docs 与 /openapi.json；
+#   3. 设置重启策略与日志轮转，避免磁盘被日志写满。
+
+services:
+  db:
+    ports: !override []
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    ports: !override []
+    logging: *default-logging
+
+  api:
+    restart: always
+    environment:
+      APP_ENV: production
+    logging: *default-logging
+
+  web:
+    restart: always
+    environment:
+      NODE_ENV: production
+    logging: *default-logging

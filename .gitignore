@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ---- Node ----
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.npm/
+playwright-report/
+test-results/
+
+# ---- Env & secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---- Data: 上传文件、数据库卷、模型缓存一律不入库 ----
+data/uploads/
+data/storage/
+data/pgdata/
+data/redis/
+data/.cache/
+# 只忽略根目录的模型缓存，不能误伤 apps/api/app/models 包
+/models/
+*.sqlite
+*.db
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,77 @@
+# 开发环境编排：数据库、缓存 + 可选的 api/web 容器。
+# 日常开发建议只起基础设施（make up-infra），api 与 web 在宿主机热重载运行。
+# 完整容器化验证用 make up。
+
+services:
+  db:
+    # pgvector 官方镜像 = Postgres 17 + vector 扩展，省去手工编译
+    image: pgvector/pgvector:pg17
+    container_name: rag-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-ragdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: ./apps/api
+    container_name: rag-api
+    restart: unless-stopped
+    env_file:
+      # required: false 保证在尚未创建 .env 的环境（如 CI）中 compose 仍可解析
+      - path: .env
+        required: false
+    environment:
+      # 容器内互访用服务名，覆盖 .env 中面向宿主机的 localhost 配置
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@db:5432/${POSTGRES_DB:-ragdb}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        # 浏览器直连后端，因此这里必须是宿主机可达地址，不能用服务名
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    container_name: rag-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
