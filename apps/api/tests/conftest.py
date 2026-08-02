@@ -9,6 +9,9 @@ from app.main import create_app
 # 测试固定使用 mock provider：不联网、不需要任何 API Key，CI 可离线运行。
 TEST_ENV = {
     "APP_ENV": "test",
+    "CORS_ORIGINS": (
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    ),
     "LLM_PROVIDER": "mock",
     "EMBEDDING_PROVIDER": "mock",
     "EMBEDDING_DIM": "64",

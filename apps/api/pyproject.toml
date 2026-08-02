@@ -9,6 +9,17 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "httpx>=0.27",
+    "alembic>=1.14",
+    "charset-normalizer>=3.4",
+    "greenlet>=3.1",
+    "markdown-it-py>=3.0",
+    "pgvector>=0.3.6",
+    "psycopg[binary]>=3.2",
+    "pymupdf>=1.25",
+    "python-docx>=1.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0",
+    "tiktoken>=0.8",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +41,9 @@ testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 addopts = "-q"
+markers = [
+    "integration: requires a reachable PostgreSQL database with pgvector",
+]
 
 [tool.ruff]
 line-length = 100

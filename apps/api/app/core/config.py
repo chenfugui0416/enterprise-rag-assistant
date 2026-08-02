@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     app_name: str = "enterprise-rag-assistant"
     app_version: str = "0.1.0"
     log_level: str = "INFO"
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    )
 
     # ---- 安全 ----
     jwt_secret: str = "dev-only-insecure-secret"
