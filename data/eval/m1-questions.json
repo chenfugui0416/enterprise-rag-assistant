@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "created": "2026-08-01",
+  "corpus": [
+    "data/demo/employee-handbook.md",
+    "data/demo/expense-policy.md",
+    "data/demo/it-security-policy.md"
+  ],
+  "notes": [
+    "expected_source 为标准答案所在文档；expected_snippet 用于判定检索是否命中。",
+    "answerable=false 的题目在语料中没有任何依据，系统必须拒答而不是编造。",
+    "命中率只有在使用真实 embedding 时才有意义：mock provider 是确定性哈希向量，",
+    "语义无关，其检索结果不可作为效果指标。"
+  ],
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "正式员工每年有多少天带薪年假？",
+      "answerable": true,
+      "expected_source": "employee-handbook.md",
+      "expected_snippet": "十天带薪年假"
+    },
+    {
+      "id": "Q02",
+      "question": "申请年假需要提前多久提交？",
+      "answerable": true,
+      "expected_source": "employee-handbook.md",
+      "expected_snippet": "提前三个工作日"
+    },
+    {
+      "id": "Q03",
+      "question": "当年没休完的年假最多能结转几天到次年？",
+      "answerable": true,
+      "expected_source": "employee-handbook.md",
+      "expected_snippet": "结转三天"
+    },
+    {
+      "id": "Q04",
+      "question": "连续病假超过几天需要提交诊断证明？",
+      "answerable": true,
+      "expected_source": "employee-handbook.md",
+      "expected_snippet": "连续病假超过两天"
+    },
+    {
+      "id": "Q05",
+      "question": "出差住在一线城市，每晚住宿费上限是多少？",
+      "answerable": true,
+      "expected_source": "expense-policy.md",
+      "expected_snippet": "一线城市每晚上限六百元"
+    },
+    {
+      "id": "Q06",
+      "question": "报销单据必须在费用发生后多少天内提交？",
+      "answerable": true,
+      "expected_source": "expense-policy.md",
+      "expected_snippet": "六十天内提交"
+    },
+    {
+      "id": "Q07",
+      "question": "客户招待费超过多少金额需要部门总监审批？",
+      "answerable": true,
+      "expected_source": "expense-policy.md",
+      "expected_snippet": "超过一千元"
+    },
+    {
+      "id": "Q08",
+      "question": "公司要求密码多久更换一次？",
+      "answerable": true,
+      "expected_source": "it-security-policy.md",
+      "expected_snippet": "每九十天强制更换"
+    },
+    {
+      "id": "Q09",
+      "question": "办公设备遗失后必须在多长时间内上报？",
+      "answerable": true,
+      "expected_source": "it-security-policy.md",
+      "expected_snippet": "二十四小时内上报"
+    },
+    {
+      "id": "Q10",
+      "question": "公司的年终奖具体怎么计算？",
+      "answerable": false,
+      "expected_source": null,
+      "expected_snippet": null,
+      "why": "语料中完全没有薪酬与年终奖相关内容，用于验证系统不编造企业事实"
+    },
+    {
+      "id": "Q11",
+      "question": "员工持股计划的行权价格是多少？",
+      "answerable": false,
+      "expected_source": null,
+      "expected_snippet": null,
+      "why": "语料中没有股权相关内容，用于验证低置信度拒答"
+    }
+  ]
+}

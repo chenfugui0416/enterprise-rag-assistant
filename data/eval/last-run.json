@@ -1,0 +1,156 @@
+{
+  "summary": {
+    "embedding_provider": "mock",
+    "embedding_model": "mock-embedding",
+    "llm_provider": "mock",
+    "top_k": 5,
+    "chunk_counts": {
+      "employee-handbook.md": 5,
+      "expense-policy.md": 5,
+      "it-security-policy.md": 5
+    },
+    "total_questions": 11,
+    "failed": 0,
+    "limited_by_mock": 9,
+    "refusal_correct": "2/2",
+    "source_hit_rate": "0/9",
+    "semantic_metrics_valid": false
+  },
+  "records": [
+    {
+      "id": "Q01",
+      "question": "正式员工每年有多少天带薪年假？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "employee-handbook.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q02",
+      "question": "申请年假需要提前多久提交？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "employee-handbook.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q03",
+      "question": "当年没休完的年假最多能结转几天到次年？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "employee-handbook.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q04",
+      "question": "连续病假超过几天需要提交诊断证明？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "employee-handbook.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q05",
+      "question": "出差住在一线城市，每晚住宿费上限是多少？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "expense-policy.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q06",
+      "question": "报销单据必须在费用发生后多少天内提交？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "expense-policy.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q07",
+      "question": "客户招待费超过多少金额需要部门总监审批？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "expense-policy.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q08",
+      "question": "公司要求密码多久更换一次？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "it-security-policy.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q09",
+      "question": "办公设备遗失后必须在多长时间内上报？",
+      "answerable": true,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "expected_source": "it-security-policy.md",
+      "source_hit": false,
+      "snippet_hit": false,
+      "has_traceable_citation": false,
+      "verdict": "limited"
+    },
+    {
+      "id": "Q10",
+      "question": "公司的年终奖具体怎么计算？",
+      "answerable": false,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "verdict": "pass"
+    },
+    {
+      "id": "Q11",
+      "question": "员工持股计划的行权价格是多少？",
+      "answerable": false,
+      "refused": true,
+      "retrieved_sources": [],
+      "top_score": null,
+      "verdict": "pass"
+    }
+  ]
+}

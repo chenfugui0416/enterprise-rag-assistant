@@ -345,3 +345,85 @@ pytest                  → 81 passed in 69.66s
 处置：`APP_ENV=production` 时不挂载这两个路由，并加测试锁定
 （生产下 `/demo/query` 与 `/documents/preview` 返回 404，`/health` 仍 200，
 `/docs` 亦关闭）。最终 `pytest` **82 passed**。
+
+---
+
+## 2026-08-01（第四段） — Claude：提交 M1 成果 + M1-06 验收
+
+- **任务**：git 提交、M1-06 验收
+
+### 一、提交（应用户要求）
+
+M1 全部成果分四个提交固化，提交前完整验证：后端 `pytest` 82 passed、
+`ruff check`/`format` 通过；前端 `lint`/`typecheck`/`build` 通过、
+`npm audit` 0 漏洞、Playwright e2e 2 passed。
+
+```
+e42b847 docs: M1 进展、架构决策与环境抢修记录
+497220b feat(api,web): 文档实验台 —— 上传、解析预览与带引用问答
+3f8c162 feat(rag): 向量化入库、Top-K 检索与带引用生成
+c0cd9f2 feat(api): M1 数据模型、文档解析与结构化切分
+585b1d5 chore: M0 工程骨架
+```
+
+提交过程中发现 Codex 还改动了前端（`page.tsx` +581 行）并新增 `lucide-react`
+依赖、修改了交接文档状态行——均已验证可用后一并提交，交接文档状态更新至当前进度。
+
+### 二、M1-06 验收：区分「机制」与「效果」
+
+交接文档的 M1 完成标准是「给定演示文档，API 可以回答 10 个预设问题并返回对应来源」。
+但当前没有任何 API Key，mock embedding 是确定性哈希向量、语义无关，
+**用它计算命中率就是伪造指标**。因此把验收拆成两件事：
+
+- **机制验收**（现在可做）：全链路能否跑通、返回结构是否完整可回溯、无依据时是否拒答
+- **效果验收**（必须等真实 embedding）：检索到的来源对不对
+
+新增内容：
+- 演示语料扩充为三份虚构企业文档（员工手册、报销制度、IT 安全规范），
+  覆盖多主题、含明确事实，便于出题
+- `data/eval/m1-questions.json`：11 道题（9 道有依据 + 2 道语料中完全没有依据）
+- `apps/api/scripts/run_m1_eval.py`：验收脚本，同一份脚本在配置真实 key 后
+  可直接产出有效指标，也是 M4 评测的基础
+
+### 三、验收结果（mock provider，真实输出）
+
+```
+[LIMIT] Q01~Q09 (有依据)  命中=False 来源=[]
+[PASS]  Q10、Q11 (无依据) 拒答=True
+--------------------------------------------------
+失败题数          : 0
+受 mock 限制未评估: 9
+无依据拒答正确    : 2/2
+标准来源命中      : 0/9
+Embedding Provider: mock
+```
+
+9 道有依据题被判为 **limited 而非 fail**：mock 的哈希向量与查询的余弦相似度
+接近 0，全部低于 0.35 阈值因而被拒答。这是 provider 的固有限制，不是链路缺陷。
+把它记为 limited，是为了不把「待验证」粉饰成「已通过」，也避免被误判成 bug。
+
+值得注意：这个结果恰恰印证了 ADR-0009 的判断——此前的 mock 特判正是用词法重叠
+把这个真相盖住，让 mock 下的检索「看起来有效」。移除后，系统诚实地暴露了
+「没有真实 embedding 就没有语义检索能力」这一事实。
+
+脚本在 mock 模式下会显式打印警告，声明命中率不得写入简历或 RESUME_EVIDENCE。
+
+### 四、修复的两个问题
+
+1. 验收脚本初版用 `pool_pre_ping=True`，在连接复用时 ping 跑在非 greenlet 上下文，
+   触发 `MissingGreenlet`；且清理沿用主流程会话，会话处于异常事务状态时清理失败。
+   改为不开 pre_ping、并用全新会话清理。
+2. 前几次失败运行残留了 5 组评测数据（users 由 1 涨到 6、chunks 涨到 76），
+   已按 `eval-%@example.test` 清理干净。修复后复跑，运行前后数据库状态一致
+   （users=1 docs=1 chunks=1），退出码 0。
+
+### 五、遗留
+
+- **M1-06 标 BLOCKED**：效果验收需要 `EMBEDDING_API_KEY`。这是 M1 唯一未达标项，
+  阻塞原因是缺凭据而非代码缺陷。
+- **M1-07 标 REVIEW**：「无依据必拒答」已验证 2/2；「有依据时不误拒」无法在 mock 下验证。
+- 阈值 0.35 为拍脑袋默认值，待 M4 用真实数据校准。
+
+- **建议下一步**：取得 SiliconFlow API Key → 改 `.env` 的 `LLM_PROVIDER` 与
+  `EMBEDDING_PROVIDER` 为 `openai_compatible` → 重跑 `scripts/run_m1_eval.py`
+  → 得到真实命中率后 M1 收尾，再进 M2。
