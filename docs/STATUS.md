@@ -1,20 +1,21 @@
 # 项目状态
 
 > 最后更新：2026-08-01
-> 当前里程碑：**M0 工程骨架**（基本完成，两项待验证）
+> 当前里程碑：**M1 最小 RAG 闭环**（M1-03 结构化切分完成）
 
 ## 一句话状态
 
-后端、前端、测试、e2e、编排配置与 CI 定义均已就位并在本机实跑通过；
-Docker 镜像构建与 pgvector 实际启动尚未验证，因为本机 Docker daemon 未就绪。
+M0 工程骨架、M1-01 数据层、M1-02 文档解析和 M1-03 结构化切分已完成。内部服务现在可以
+把 PDF、DOCX、Markdown、TXT 转换成带页码/标题上下文的 Token 有界切片；上传接口、向量化
+和问答链路仍待实现。
 
 ## 已完成并验证
 
 | 项目 | 验证命令 | 真实结果 |
 |---|---|---|
-| 后端单元/集成测试 | `cd apps/api && .venv/bin/python -m pytest` | 13 passed |
+| 后端单元/集成测试 | `cd apps/api && .venv/bin/python -m pytest` | 45 passed |
 | 后端静态检查 | `.venv/bin/ruff check .` | All checks passed |
-| 后端格式检查 | `.venv/bin/ruff format --check .` | 25 files already formatted |
+| 后端格式检查 | `.venv/bin/ruff format --check .` | 49 files already formatted |
 | 前端 lint | `cd apps/web && npm run lint` | 0 problems |
 | 前端类型检查 | `npm run typecheck` | 通过，无错误 |
 | 前端生产构建 | `npm run build` | 成功，`/` 与 `/_not-found` 静态预渲染 |
@@ -24,21 +25,39 @@ Docker 镜像构建与 pgvector 实际启动尚未验证，因为本机 Docker d
 | 生产编排配置 | `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet` | 通过 |
 | 后端接口手工验证 | `curl -i http://127.0.0.1:8100/health` | HTTP 200，返回 mock provider 信息 |
 | CORS 配置 | `curl -H "Origin: http://127.0.0.1:3100" .../health` | 正确返回 `access-control-allow-origin` |
+| **pgvector 实际启动（VPS）** | `docker compose up -d db redis` + `\dx` | rag-db / rag-redis 双 healthy；**vector 0.8.6**（含 ivfflat/hnsw）、**pg_trgm 1.6**、PostgreSQL 17.10 |
+| **向量检索端到端（VPS）** | HNSW 索引 + 余弦相似度查询 | 排序正确：年假制度 1.0000 > 年假申请 0.9939 > 报销流程 0.0000 |
+| **Redis 实际启动（VPS）** | `redis-cli set/get/del` + `config get appendonly` | 读写正常，AOF 持久化已开启 |
+| **容器资源占用（VPS）** | `docker stats --no-stream` | rag-db 74.3 MiB、rag-redis 12.1 MiB |
+| M1-01 模型导入与元数据 | `cd apps/api && .venv/bin/python -m pytest tests/test_models.py` | 3 passed；6 张核心表、`VECTOR(1024)` 和枚举值通过断言 |
+| M1-01 Alembic 离线迁移 | `cd apps/api && .venv/bin/alembic upgrade head --sql` | 生成扩展、3 个枚举、6 张表和向量列 |
+| M1-02 文档解析 | `cd apps/api && .venv/bin/python -m pytest tests/test_loaders.py` | 11 passed；覆盖四种格式、中文编码、页码/标题/表格和失败场景 |
+| M1-03 结构化切分 | `cd apps/api && .venv/bin/python -m pytest tests/test_chunking.py` | 14 passed；覆盖页码/标题边界、段落打包、Token 上限、中文混合文本、长段 overlap、空块和非法参数 |
+| M0-18 备用端口 CORS | `cd apps/api && .venv/bin/python -m pytest tests/test_health.py` | 6 passed；localhost/127.0.0.1 的 3000/3001 均通过预检 |
 
 ## 当前能力边界（不要超出这个范围描述项目）
 
-- 后端只有 `/health` 一个端点，**没有任何 RAG 功能**。
-- 没有数据库表、没有迁移、没有认证、没有文档上传。
+- 后端仍只有 `/health` 一个端点，**没有文档上传、检索或问答功能**。
+- M1-01 已建立用户、知识库、文档、文档切片、会话和消息数据模型；尚未接入业务路由。
+- M1-02 解析服务已支持 PDF、DOCX、Markdown、TXT，返回统一 `ParsedDocument`/`ParsedBlock`。
+- PDF 保留页码；DOCX/Markdown 保留标题上下文；DOCX 表格按行提取；TXT 支持常见中文编码。
+- M1-03 切分服务默认使用 `cl100k_base` 计数；按页码和标题上下文分组，优先拼接段落，超长内容按句/行后以 Token 窗口兜底，并保留来源 block 索引。
+- 切片结果为不可变 `Chunk`，包含稳定索引、正文、Token 数、页码、标题和来源范围；尚未接入向量化或数据库写入。
+- 当前不包含扫描 PDF OCR、旧版 `.doc`、复杂 DOCX 浮动对象和加密 PDF 解密。
 - Provider 层已具备切换真实厂商的能力，但**默认且仅验证过 mock 实现**。
 - 前端只有一个首页，展示后端连通性与里程碑列表。
 - 尚无任何检索命中率、延迟等评测数字。
 
 ## 已知问题
 
-1. **Docker daemon 未就绪（阻塞 M0-13）**
-   Docker Desktop 进程已启动，但 `docker info` 持续失败，`/Users/wind/.docker/run/docker.sock`
-   不存在。需要在本机 Docker Desktop 界面完成启动或授权后，重新执行验证。
-   影响：`docker build`、`make up`、pgvector 扩展是否真正可用，均未经实际验证。
+1. **本地 Docker Desktop 仍不可用（不阻塞项目，已用 VPS 验证替代）**
+   2026-08-01 排查结论：两处根本损坏已修复——(a) ext4 超级块记录的容量大于 `Docker.raw`
+   实际大小（磁盘曾被截断），`e2fsck` 直接 abort；(b) containerd 的 bbolt 元数据库
+   `meta.db` 有一个数据页被清零，导致 containerd 每次启动都 panic。修复后磁盘错误归零、
+   containerd 能正常 `serving`，但 Docker Desktop 4.74.0 启动后仍会反复自行关机
+   （`recovering from engine crash`）。
+   建议：重装 Docker Desktop，或改用 colima（本机已有 colima context）。
+   影响：本地 `make up` 与镜像构建仍未验证；pgvector 与 Redis 已在 VPS 上验证通过。
 
 2. **Codex 不可用（阻塞 M0-17）**
    Codex CLI 的上游端点持续返回 503（`Reconnecting 1/5 … 5/5` 后失败），本轮 M0 全部由
@@ -56,4 +75,16 @@ Docker 镜像构建与 pgvector 实际启动尚未验证，因为本机 Docker d
 1. 解除 Docker 阻塞，跑通 `make up`，确认 pgvector 与 pg_trgm 扩展已创建。
 2. 首次 push 到 GitHub，确认 CI 四个 job 全绿。
 3. 取得模型 API Key 并写入本地 `.env`（不提交）。
-4. 进入 M1：数据模型与迁移 → 文档解析 → 切分 → 向量化入库 → 检索 → 带引用生成。
+4. 解除 Docker/pgvector 环境阻塞，执行真实 `alembic upgrade head` 并检查扩展与表结构。
+5. 继续 M1-04：调用 Embedding Provider 并写入 pgvector，沿用 M1-03 的来源元数据。
+
+---
+
+## 2026-08-02 — M1-04 追加状态
+
+- M1-04 向量化与 pgvector 入库已完成；Embedding 服务按 `EMBEDDING_BATCH_SIZE` 分批，并在写库前逐个校验 `EMBEDDING_DIM`。
+- 文档入库采用整篇“先删后插”事务；重复处理同一文档不会增加 chunk 数，失败会回滚替换并将文档置为 `failed`。
+- `0002_document_chunks_hnsw_index` 已在真实 PostgreSQL 17 + pgvector 0.8.6 数据库上执行，建立 HNSW `vector_cosine_ops` 索引。
+- 真实数据库集成测试已覆盖解析、切分、向量化、入库、余弦检索、幂等重处理和失败回滚；数据库不可达时按 fixture 探测跳过。
+- 当前能力边界推进到“内部服务可完成向量入库”；M1-05 Top-K 检索服务和 M1-06 生成链路仍未实现。
+- 验证结果：`ruff check .` 通过，`ruff format --check .` 58 files already formatted，`pytest` 全量 62 passed。

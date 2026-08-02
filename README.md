@@ -3,8 +3,8 @@
 面向企业内部知识库的问答系统：上传文档、建立知识库、基于知识库提问，**返回带原文引用与
 来源位置的答案**；证据不足时明确拒答而非编造。
 
-> **当前状态：M0 工程骨架**
-> 后端目前只有 `/health` 一个端点，RAG 功能尚未实现。
+> **当前状态：M1-03 结构化切分已完成**
+> 后端目前只有 `/health` 一个端点，文档上传、检索和问答功能尚未实现。
 > 详细的能力边界与已验证结果见 [`docs/STATUS.md`](docs/STATUS.md)。
 > 本 README 中的所有命令均已在本机实际执行过。
 
@@ -18,6 +18,21 @@
 | 模型 | OpenAI 兼容 API（SiliconFlow / DeepSeek / vLLM 等）+ 内置 Mock |
 | 测试 | pytest · Playwright · ruff · ESLint · tsc |
 | 交付 | Docker 多阶段构建 · Docker Compose · GitHub Actions |
+
+## 当前文档解析能力
+
+- PDF：按页提取文本并保留从 1 开始的页码；扫描件 OCR 尚未加入。
+- DOCX：按原顺序提取标题、段落和表格，并保留标题上下文。
+- Markdown：使用 CommonMark 解析标题、可见正文、列表和代码块。
+- TXT：支持 UTF-8、GB18030、Big5，并保留空行分隔的段落。
+- 默认单文件上限 50 MiB；空文档、损坏文件、加密 PDF、旧版 `.doc` 和未知格式会返回统一解析错误。
+
+## 当前文档切分能力
+
+- 入口：`app.rag.chunking.chunk_document(parsed_document, ...)`；已有块列表可使用 `chunk_blocks(...)`。
+- 默认使用 `tiktoken` 的 `cl100k_base` 计数；`max_tokens`、`chunk_overlap` 和最小 Token 数均可配置。
+- 页码和标题上下文是硬边界；同一上下文内优先按段落拼接，过长段落先按句/行组织，再按 Token 窗口兜底。
+- 每个不可变 `Chunk` 保留稳定索引、Token 数、页码、标题和来源 block 索引，便于后续引用回溯。
 
 ## 快速开始
 
@@ -107,7 +122,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 工程骨架、编排、CI | 基本完成（两项待验证） |
-| M1 | 最小 RAG 闭环：解析 → 切分 → 向量化 → 检索 → 带引用生成 | 未开始 |
+| M1 | 最小 RAG 闭环：解析 → 切分 → 向量化 → 检索 → 带引用生成 | M1-03 结构化切分完成 |
 | M2 | 全栈产品：登录、知识库管理、流式问答、引用预览 | 未开始 |
 | M3 | 企业级可靠性：租户隔离、审计日志、限流、注入防护 | 未开始 |
 | M4 | 评测：≥30 题评测集、命中率、拒答表现、延迟 | 未开始 |

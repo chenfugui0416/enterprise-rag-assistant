@@ -13,7 +13,7 @@ flowchart TB
 
     subgraph Server["应用层"]
         API["FastAPI 后端<br/>Pydantic 校验 · JWT 认证（计划）"]
-        RAG["RAG 管线<br/>解析 → 切分 → 向量化 → 检索 → 生成（计划）"]
+        RAG["RAG 管线<br/>解析 → 切分（已实现）→ 向量化 → 检索 → 生成（计划）"]
     end
 
     subgraph Data["数据层"]
@@ -67,13 +67,13 @@ flowchart LR
 apps/api/app/
 ├── api/routes/     HTTP 路由，只做参数校验与响应装配
 ├── core/           配置、日志、安全等横切关注点
-├── models/         SQLAlchemy 数据模型（计划）
+├── models/         SQLAlchemy 数据模型（M1-01 已实现）
 ├── schemas/        Pydantic 请求/响应模型（计划）
 ├── services/       业务编排层
 └── rag/
     ├── providers/  模型 Provider 抽象与实现（已实现）
-    ├── loaders/    PDF / DOCX / MD / TXT 解析（计划）
-    ├── chunking/   结构化切分（计划）
+    ├── loaders/    PDF / DOCX / MD / TXT 解析（M1-02 已实现）
+    ├── chunking/   结构化切分（M1-03 已实现）
     ├── retrieval/  向量检索、混合检索、重排（计划）
     ├── generation/ 提示词装配、引用、拒答（计划）
     └── evaluation/ 离线评测（计划）
@@ -84,6 +84,17 @@ apps/web/src/
 ```
 
 分层原则：路由不写业务逻辑，服务层不直接拼 SQL 字符串，RAG 管线不感知 HTTP。
+
+## 结构化切分（M1-03 已实现）
+
+`app.rag.chunking` 接收 `ParsedDocument`，输出不可变的 `Chunk` 元组。切分过程先按
+`page_number` 和 `section_title` 建立语义分组，再在同一分组内以空行拼接段落；单段文本优先
+按句子/行组织，无法形成更小语义单元时由 Token 窗口保证 `max_tokens` 上限。窗口移动时应用
+`chunk_overlap`，不会跨越页码或标题上下文。
+
+默认 Token 编码为 `cl100k_base`，同时保留 `Tokenizer` 协议以便测试和后续替换编码。每个
+`Chunk` 带有稳定的 `index`、实际 `token_count`、页码、标题和 `source_block_indices`，为
+后续向量入库和引用装配提供回溯坐标；此模块不直接访问数据库或 Embedding Provider。
 
 ## 运行拓扑
 

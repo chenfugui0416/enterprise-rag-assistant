@@ -69,3 +69,279 @@
   2. 创建 GitHub 仓库并首次 push，确认 CI 全绿。
   3. 取得模型 API Key 写入本地 `.env`。
   4. 开始 M1-01 数据模型与迁移。
+
+## 2026-08-01 — Codex（完成 M1-01）
+
+- **任务**：M1-01 SQLAlchemy 数据模型 + Alembic 迁移
+- **完成**：
+  - 加入 SQLAlchemy 2、Alembic、psycopg、pgvector 和 greenlet 依赖。
+  - 建立用户、知识库、文档、文档切片、会话、消息六张核心表的模型。
+  - 文档切片预留 `VECTOR(1024)`，枚举状态和级联删除策略写入模型与迁移。
+  - 建立异步数据库会话入口和可读取项目配置的 Alembic 环境。
+  - 初始迁移创建 `pgcrypto`、`vector`、`pg_trgm` 扩展，并可离线生成完整 SQL。
+  - 增加模型元数据、向量维度和枚举稳定性测试。
+- **修改文件**：`apps/api/pyproject.toml`、`apps/api/app/db/**`、`apps/api/app/models/**`、
+  `apps/api/tests/test_models.py`、`apps/api/alembic.ini`、`apps/api/alembic/**`，以及项目状态文档。
+- **运行命令与真实结果**：
+  - `cd apps/api && uv pip install -e '.[dev]'` → 依赖安装成功。
+  - `cd apps/api && .venv/bin/python -m pytest` → **16 passed**。
+  - `cd apps/api && .venv/bin/ruff check .` → **All checks passed**。
+  - `cd apps/api && .venv/bin/ruff format --check .` → **36 files already formatted**。
+  - `cd apps/api && .venv/bin/alembic upgrade head --sql` → 生成 3 个枚举、6 张表和 `VECTOR(1024)`。
+- **已知问题**：真实 `alembic upgrade head` 尚未完成。当前本机 PostgreSQL 没有 `vector` 扩展，
+  Docker Desktop daemon 也未启动；待 `pgvector/pgvector:pg17` 可用后重跑。
+- **下一位执行者**：Claude 审阅模型关系、迁移约束和向量维度；随后 Codex 开始 M1-02 文档解析。
+
+## 2026-08-01 — Codex（完成 M1-02）
+
+- **任务**：M1-02 PDF、DOCX、Markdown、TXT 文档解析
+- **完成**：
+  - 定义格式无关的 `ParsedDocument` 与 `ParsedBlock`，为 M1-03 提供页码、标题、块类型等元数据。
+  - PDF 按页提取文本并保留一基页码；加密、损坏和无文本 PDF 返回统一解析错误。
+  - DOCX 按文档顺序提取标题、段落和表格，并把当前标题附到后续内容块。
+  - Markdown 通过 CommonMark Token 解析可见正文、列表、标题与代码块，不采用正则剥标签。
+  - TXT 优先 UTF-8，随后支持 GB18030、Big5，并以通用编码探测作为回退。
+  - 统一检查文件存在性、50 MiB 默认限制、空内容、二进制伪装和不支持的扩展名。
+  - 公共错误信息不携带源文件绝对路径。
+- **修改文件**：`apps/api/app/rag/loaders/**`、`apps/api/tests/test_loaders.py`、
+  `apps/api/pyproject.toml`、README 与项目状态文档。
+- **运行命令与真实结果**：
+  - `cd apps/api && uv pip install -e '.[dev]'` → 解析依赖安装成功。
+  - `cd apps/api && .venv/bin/python -m pytest tests/test_loaders.py` → **11 passed**。
+  - `cd apps/api && .venv/bin/python -m pytest` → **27 passed**。
+  - `cd apps/api && .venv/bin/ruff check .` → **All checks passed**。
+  - `cd apps/api && .venv/bin/ruff format --check .` → **45 files already formatted**。
+- **测试中修正的问题**：
+  1. 短中文 GB18030 被通用探测器误判为 CP949；改为 UTF-8 优先、中文编码优先、通用回退。
+  2. 损坏 DOCX 初次暴露底层 `BadZipFile`；增加异常封装并补回归测试。
+- **已知边界**：尚无扫描 PDF OCR、旧版 `.doc`、复杂 DOCX 浮动对象或加密 PDF 解密。
+- **下一位执行者**：Claude 审阅解析结果契约；随后 Codex 执行 M1-03 结构化切分。
+
+## 2026-08-01 — Codex（完成 M1-03）
+
+- **任务**：根据页码、标题、段落和 Token 长度实现结构化切分。
+- **完成**：
+  - 新增 `app.rag.chunking` 公共 API、`ChunkingConfig`、不可变 `Chunk` 和可注入 `Tokenizer` 协议。
+  - 默认使用 `tiktoken` `cl100k_base`；支持 `max_tokens`、`chunk_overlap`、`min_chunk_tokens` 和编码名称配置。
+  - 先按页码/标题建立硬边界，再在同一上下文内按段落拼接；长段优先按句/行组织，最后用 Token 窗口保证上限。
+  - 切片保留稳定索引、实际 Token 数、页码、标题和来源 block 索引，可直接接收 M1-02 的 `ParsedDocument`。
+  - 空块会跳过，空文档返回空元组；参数校验拒绝非正上限、非法 overlap 和不合理最小长度。
+- **修改文件**：`apps/api/app/rag/chunking/**`、`apps/api/tests/test_chunking.py`、
+  `apps/api/pyproject.toml`，以及 README、STATUS、TASKS、ARCHITECTURE 和本日志。
+- **运行命令与真实结果**：
+  - `cd apps/api && uv pip install -e '.[dev]'` → 安装 `tiktoken==0.13.0` 成功。
+  - `cd apps/api && .venv/bin/python -m pytest tests/test_chunking.py` → **14 passed**。
+  - `cd apps/api && .venv/bin/python -m pytest` → **41 passed**。
+  - `cd apps/api && .venv/bin/ruff check .` → **All checks passed**。
+  - `cd apps/api && .venv/bin/ruff format --check .` → 结果见 `docs/STATUS.md`，全部文件已格式化。
+- **已知边界**：尚未接入 Embedding、pgvector、上传接口或检索服务；页码/标题边界和 Token overlap
+  已在单元测试覆盖，真实数据库环境仍受 Docker/pgvector 阻塞影响。
+- **下一位执行者**：Claude 审阅切分策略和来源元数据；随后 Codex 执行 M1-04 向量化与 pgvector 入库。
+
+## 2026-08-02 — Codex（修复本地 3001 端口 CORS）
+
+- **任务**：修复前端运行在 `http://localhost:3001` 时健康检查显示 `Failed to fetch`。
+- **原因**：后端正常返回 `/health`，但默认 CORS 仅允许 `http://localhost:3000`，导致 3001
+  来源的浏览器预检返回 `400 Disallowed CORS origin`。
+- **完成**：开发默认来源和 `.env.example` 同时允许 localhost/127.0.0.1 的 3000、3001；
+  新增四个来源的参数化预检测试。
+- **验证**：`pytest tests/test_health.py` → **6 passed**；3001 OPTIONS 请求 → **HTTP 200**；
+  Playwright 加载 `http://localhost:3001` 后 `/health` → **200**，页面显示 `status: ok`。
+
+---
+
+## 2026-08-01（第二段） — Claude：Docker 环境抢修 + M0-13 验证
+
+- **任务**：M0-13（pgvector 实际启动验证）、M0-13b（本地 Docker 恢复）
+
+- **背景**：本机 Docker daemon 持续返回 HTTP 500，`make up` 无法执行，M0-13 被阻塞。
+
+- **根因诊断（两处独立损坏）**：
+
+  1. **ext4 超级块与设备尺寸不一致**
+     `e2fsck` 报 `error code 8`：superblock 记录 122,060,800 blocks，设备实际只有
+     120,686,336 blocks（差 5,368 MiB）。原因是虚拟磁盘曾从 476,800 MiB 被调小到
+     471,432 MiB，`Docker.raw` 被截断而超级块未同步。宿主机 `/System/Volumes/Data`
+     已用 93%（仅剩 31 GB）是诱因。
+     **修复**：`Docker.raw` 是稀疏文件，把 apparent size 补回 `122060800 × 4096 + 1 MiB`
+     不占用实际磁盘空间（实占仍为 12.66 GiB），并把 `DiskSizeMiB` 显式锁定为 476801
+     防止再次截断。此后 `e2fsck` 能完整跑完 Pass 1–5，错误码由 8 降为 4。
+
+  2. **containerd 的 bbolt 元数据库损坏**
+     `panic: assertion failed: Page expected to be: 1098, but self identifies as 0`
+     出现在 `bbolt.(*DB).loadFreelist`，containerd 每次启动即 panic，dockerd 无法拉起。
+     panic 堆栈中 bbolt 路径长度 `0x49`（73 字符）恰好等于
+     `/var/lib/desktop-containerd/daemon/io.containerd.metadata.v1.bolt/meta.db`。
+     **尝试修复**：`bbolt surgery freelist abandon` 与 `clear-page` 均失败——page 1098
+     整页被清零（自称 id=0），属实际数据页丢失，不可恢复。
+     **处置**：备份该 8 MB 文件后删除，由 containerd 重建。卷数据（含
+     `hermes-webio-check_hermes-data`）位于 `/var/lib/docker/volumes`，未受影响。
+
+- **使用工具**：`brew install e2fsprogs`（1.47.4）+ `hdiutil attach -nomount` 把
+  `Docker.raw` 挂成块设备（属主为当前用户，无需 sudo）；`debugfs` 定位并清理孤立
+  inode；`go install go.etcd.io/bbolt/cmd/bbolt` 诊断 bbolt。
+
+- **e2fsck 收敛过程**：两个 `/lost+found` 下的空目录 inode（344081、344731）的 `..`
+  指向 NULL inode，e2fsck 每轮都把它们重新挂回 lost+found 再报修不了，形成死循环。
+  `unlink` + `kill_file` + `freei` 均无效，最终用 `debugfs clri` 将 inode 结构整体清零
+  才收敛。最终 `Filesystem state: clean`。
+
+- **结果**：
+  - 磁盘层面完全修复：`e2fsck` 五个 Pass 零错误，后续启动磁盘错误计数为 0。
+  - containerd panic 消除：删除 meta.db 后两次启动均正常 `serving...`。
+  - **但 Docker Desktop 4.74.0 应用层仍反复自行关机**（`recovering from engine crash:
+    context canceled`），本地 daemon 最终未能起来。判断为 Desktop 自身问题，
+    建议重装或改用 colima（本机已有 colima context）。
+
+- **改走 VPS 完成 M0-13**（Ubuntu 24.04 / Docker 29.1.3 / Compose 2.37.1）：
+  ```
+  rsync 项目 → cp .env.example .env（端口改 55432/56379 避开既有服务）
+  docker compose config --quiet          → 通过
+  docker compose up -d db redis          → rag-db / rag-redis 双 healthy（20 秒内）
+  \dx                                    → vector 0.8.6、pg_trgm 1.6、PostgreSQL 17.10
+  HNSW 索引 + 余弦检索                    → 年假制度 1.0000 > 年假申请 0.9939 > 报销流程 0.0000
+  redis-cli set/get/del + appendonly      → 读写正常，AOF 已开启
+  docker stats                           → rag-db 74.3 MiB、rag-redis 12.1 MiB
+  ```
+  这证明 `docker-compose.yml` 与 `scripts/init-db.sql` 在真实 Linux 环境下可用，
+  且 pgvector 不只是"装上了"，而是真能建 HNSW 索引并返回正确的相似度排序。
+
+- **VPS 现状备注**：1 核 / 961 MiB 内存（可用约 226 MiB）+ 1 GiB swap，23 GB 磁盘（剩 11 GB），
+  已运行 7 个生产容器，80/443 端口被占用。M5 若在此部署需先规划反向代理与内存预算；
+  另发现 `fwupd` 常驻占用约 195 MB，服务器场景可考虑关闭。
+
+- **已知问题**：本地 Docker Desktop 未恢复（见 `docs/STATUS.md` 已知问题 1）。
+
+- **建议下一步**：重装 Docker Desktop 或启用 colima 以恢复本地容器能力；
+  M5 部署前先解决 VPS 的内存与端口规划。
+
+---
+
+## 2026-08-02 — Codex（完成 M1-04）
+
+- **任务**：批量向量化、pgvector 原子入库、HNSW 索引与真实数据库集成测试。
+- **完成**：
+  - 新增 `app.rag.embeddings` 公共服务，复用现有 `EmbeddingProvider` 和 provider factory。
+  - 按 `EMBEDDING_BATCH_SIZE` 切分请求，校验 provider 返回数量、provider 声明维度和每条向量的实际维度；空输入不调用 provider。
+  - 文档入库维护 `processing → ready / failed`，全部向量成功后才在单个事务内删除旧切片并插入新切片；数据库异常回滚整篇替换。
+  - 采用先删后插保证同一文档重处理幂等，原因和取舍见 ADR-0007。
+  - 新增 `0002_document_chunks_hnsw_index`，使用 HNSW + `vector_cosine_ops`；HNSW、IVFFlat、余弦与 L2 的取舍见 ADR-0008。
+  - 真实 ORM 测试发现并修复 `Message.created_at` 已存在于迁移但遗漏于模型映射的问题。
+  - 集成测试使用 1024 维 Mock provider，不需要 API Key；数据库不可达时自动跳过，并在 teardown 精确清理测试用户、知识库、文档和切片。
+- **修改文件**：`apps/api/app/rag/embeddings/**`、`apps/api/app/models/document.py`、
+  `apps/api/app/models/conversation.py`、`apps/api/alembic/versions/0002_document_chunks_hnsw_index.py`、
+  `apps/api/tests/test_embeddings.py`、`apps/api/tests/test_embeddings_integration.py`、
+  `apps/api/tests/test_models.py`、`apps/api/pyproject.toml` 和项目状态文档。
+- **运行命令与真实结果**：
+  - `cd apps/api && .venv/bin/alembic upgrade head` → 真实库成功执行 `0001_initial_schema → 0002_document_chunks_hnsw_index`。
+  - `cd apps/api && .venv/bin/alembic downgrade 0001_initial_schema && .venv/bin/alembic upgrade head` → 真实库索引降级/升级均成功，最终 `0002_document_chunks_hnsw_index (head)`。
+  - `cd apps/api && .venv/bin/python -m pytest tests/test_embeddings.py` → **6 passed**。
+  - `cd apps/api && .venv/bin/python -m pytest tests/test_embeddings_integration.py` → **2 passed**；真实执行解析、切分、批量向量化、写库、余弦检索、幂等和失败回滚。
+  - `cd apps/api && .venv/bin/ruff check .` → **All checks passed!**
+  - `cd apps/api && .venv/bin/ruff format --check .` → **58 files already formatted**。
+  - `cd apps/api && .venv/bin/python -m pytest` → **62 passed**。
+  - fixture 清理复查 → 测试专用 users / knowledge_bases / documents 记录均为 **0**。
+- **当前边界**：本轮未实现 M1-05 检索服务或 M1-06 生成；集成测试只用 SQL 验证 pgvector 近邻排序。
+
+---
+
+## 2026-08-01（第三段） — Claude：M1-04 代码审查 + 接手 M1-04b/M1-05
+
+- **任务**：M1-04 审查、M1-04b、M1-05、M1-06/07 修正
+
+- **背景**：Codex 完成 M1-04 后，派发的第二轮（M1-04b + M1-05）执行中被中断，
+  产出不完整——`retrieval/service.py` 已写但 M1-04b 安全修复完全没做，
+  且提前实现了 M1-06/07（指令中明确要求不要提前做）。由 Claude 接手补完。
+
+### 一、M1-04 审查结论：实现可靠，但有一处安全缺陷
+
+独立复核确认 Codex 未虚报：集成测试是**真跑**（2 passed 而非 skipped，耗时 31.9s，
+符合走隧道的网络往返），全量 62 passed，HNSW 迁移正确使用 `vector_cosine_ops`，
+幂等采用先删后插且在事务内，先完成 embedding 再开事务（provider 失败时旧索引完好），
+并用 `with_for_update` 加行锁。
+
+**缺陷（已实测确认）**：`_mark_failed` 把 `str(exc)[:500]` 直接写入
+`document.error_message`，而 SQLAlchemy 的 `StatementError.__str__` 会拼接
+`[SQL: ...]` 与 `[parameters: ...]`，参数即 chunk 正文。构造一次外键违反实测：
+
+```
+异常类型: IntegrityError
+str(exc) 总长度: 1241
+是否包含文档正文: True
+截断到 500 字符后仍含正文: False   ← 仅因 SQL 段较长而侥幸
+```
+
+该字段会经 API 返回给前端。交接文档明确禁止记录文档正文。
+
+### 二、M1-04b 修复
+
+新增 `safe_error_detail()`：对 `SQLAlchemyError` 取 `exc.orig` 首行，
+**结构性**排除 SQL 与绑定参数，而非依赖长度截断。同时清理了 `embed_texts` 中
+一段只有 `raise` 的空 `try/except`。
+
+新增 `tests/test_error_redaction.py`（5 passed），断言正文、`[SQL:`、`[parameters:`
+均不出现，同时保留异常类型与原因。
+
+### 三、M1-05 修正：三处缺陷
+
+1. **移除伪造分数**（见 ADR-0009）：检索对 `mock-embedding` 特判，用词法重叠
+   覆盖真实余弦分数，会让 M4 评测产出虚假命中率。
+2. **补 `ready` 状态过滤**：原实现只按 `knowledge_base_id` 过滤，
+   `processing`/`failed` 文档残留的上一版切片会被检索到。
+3. **阈值下推到 SQL**：原实现先 `LIMIT top_k` 再在 Python 过滤 `min_score`，
+   低分结果会占掉名额，把本该入选的高分结果挤出 Top-K。改为
+   `WHERE distance <= 1 - min_score`。
+
+### 四、补测试：检索此前零覆盖
+
+Codex 留下的 `test_retrieval_generation.py` 只测了 `citation_label` 字符串拼接
+与参数校验，**没有任何测试引用 `VectorSearchService`**。
+
+新增 `tests/test_retrieval_integration.py`（4 passed，真实库）：
+- 余弦排序正确，分数与手工计算值一致（1.0 / 0.9938837 / 0.0）
+- 引用元数据齐全（document_name、chunk_index、page_number、section_title）
+- `processing` 文档的切片确实被排除
+- `top_k=2` + 阈值 0.5 时，两条返回都合格（验证阈值下推）
+- `EXPLAIN` 确认计划走 `ix_document_chunks_embedding_hnsw`
+  （先 `SET LOCAL enable_seqscan = off`，排除"数据量小所以顺序扫描"的干扰；
+  若算子与索引 ops 不匹配，索引会被静默忽略而功能测试照样通过）
+
+关键做法：用 `StubEmbeddingProvider` 给定精确查询向量，而不是让 mock 生成哈希向量。
+mock embedding 语义无关，用它断言"问年假就返回年假文档"是自欺欺人；
+这里验证的是检索机制本身，与模型语义能力无关，因此可离线确定性断言。
+
+新增 `tests/test_generation.py`（5 passed）：断言提示词确实携带证据正文与引用标签、
+系统提示词包含防注入声明、**无证据时完全不调用模型**（防止其凭参数记忆编造企业事实）、
+`confidence_threshold` 正确下传为 `min_score`。
+
+### 五、验证结果（真实输出）
+
+```
+ruff check .            → All checks passed!
+ruff format --check .   → 66 files already formatted
+pytest                  → 81 passed in 69.66s
+```
+
+### 六、已知问题与遗留
+
+- M1-06 尚缺交接文档要求的「10 道预设问题返回对应来源」验收，故标为 REVIEW 而非 DONE。
+- M1-07 的拒答阈值默认 0.35 是拍脑袋值，未经评测校准，待 M4 用真实数据定。
+- M1-06/07 属提前实现，未按里程碑节奏走，已在任务表注明责任划分。
+
+- **下一位执行者**：Codex（M1-06 的 10 题验收）或 Claude（M2 前端）
+
+- **建议下一步**：先补齐 M1-06 的 10 道预设问题验收，形成 M1 的完整闭环，再进 M2。
+
+### 七、追加：演示路由的生产隔离（M1-08）
+
+审查中发现 Codex 还提前实现了 API 层（`app/api/routes/demo_rag.py`、
+`document_preview.py`，已挂载进 `main.py`），属 M2 范围。数据库里那条
+`demo@enterprise-rag.local` 演示数据即由此产生。
+
+上传大小限制是有的（`_save_upload` 流式读取，超限返回 413），这点没问题。
+但两个路由**没有任何认证与配额控制**：任何人都能上传文件、触发文档解析和
+模型调用。M5 的目标是部署到公网，靠"部署时记得关掉"不可靠。
+
+处置：`APP_ENV=production` 时不挂载这两个路由，并加测试锁定
+（生产下 `/demo/query` 与 `/documents/preview` 返回 404，`/health` 仍 200，
+`/docs` 亦关闭）。最终 `pytest` **82 passed**。
