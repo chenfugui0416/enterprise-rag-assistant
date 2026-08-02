@@ -34,6 +34,10 @@ export default defineConfig({
         LLM_PROVIDER: "mock",
         EMBEDDING_PROVIDER: "mock",
         CORS_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
+        // 认证用例需要真实用户表；后端启动时幂等创建这个种子管理员。
+        // 密码仅用于本地与 CI 的一次性测试环境，不对应任何真实账号。
+        SEED_ADMIN_EMAIL: "e2e-admin@example.test",
+        SEED_ADMIN_PASSWORD: "e2e-only-password-9f3a",
       },
     },
     {

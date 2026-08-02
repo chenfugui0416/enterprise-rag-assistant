@@ -334,3 +334,47 @@ Mock 的价值在于**确定性**，不在于"看起来聪明"。凡是与模型
 
 无需回滚。若将来确需差异化行为，应通过显式配置项表达，并让该配置在测试中被覆盖，
 而不是依赖 provider 名字。
+
+---
+
+## ADR-0010 认证凭据使用 httpOnly Cookie 而非 localStorage
+
+- 日期：2026-08-02
+- 状态：已采纳
+
+**背景**
+
+M2 需要让浏览器持有短期 JWT。浏览器端常见做法是把 Token 放在 localStorage 后由
+JavaScript 拼接 `Authorization` 请求头，或由服务端通过 Cookie 下发。前者会让任何成功执行的
+XSS 脚本直接读取并带走长期可复用的凭据。
+
+**决定**
+
+登录成功后只通过名为 `access_token` 的 Cookie 下发 JWT，不在响应体返回 Token。Cookie 使用
+`HttpOnly`、`SameSite=Lax` 和 `Path=/`；`APP_ENV=production` 时增加 `Secure`。前端请求使用
+`credentials: "include"`，CORS 只配置显式来源，不使用 `*`。JWT 必须含过期时间，并通过
+`JWT_SECRET`、`JWT_ALGORITHM`、`ACCESS_TOKEN_EXPIRE_MINUTES` 创建和校验。
+
+**备选方案**
+
+- localStorage + Bearer Token：接入简单，但 XSS 可以直接读取并外传凭据。
+- 服务端随机 Session ID：便于主动失效，但需要 Redis 或数据库维护会话状态，本阶段会增加状态
+  存储与清理机制。
+
+**理由**
+
+httpOnly Cookie 把凭据从 JavaScript 可读空间移除，降低 XSS 造成凭据外泄的风险；短期签名 JWT
+保留当前无状态校验方式，不提前引入会话存储。
+
+**代价**
+
+浏览器会自动携带 Cookie，因此引入 CSRF 面。当前 `SameSite=Lax` 会阻止大多数跨站 POST 请求
+携带 Cookie，同时保留同站部署和普通导航体验；所有状态变更接口也使用非 GET 方法。它不是完整
+的 CSRF 方案：未来若前后端需要跨站部署、开放第三方嵌入或出现更敏感操作，应增加 CSRF Token
+或严格校验 `Origin`/`Referer`。JWT 在到期前也无法单独撤销，后续如需强制下线再引入服务端会话
+或 Token 吊销表。
+
+**回滚方式**
+
+如需可撤销会话，可保持 Cookie 和 API 响应契约不变，把 Cookie 内容替换为服务端 Session ID；
+前端无需改为读取 Token。

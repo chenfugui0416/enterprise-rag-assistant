@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-only-insecure-secret"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    seed_admin_email: str = ""
+    seed_admin_password: str = ""
 
     # ---- 基础设施 ----
     database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/ragdb"

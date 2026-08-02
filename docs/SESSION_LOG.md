@@ -427,3 +427,49 @@ Embedding Provider: mock
 - **建议下一步**：取得 SiliconFlow API Key → 改 `.env` 的 `LLM_PROVIDER` 与
   `EMBEDDING_PROVIDER` 为 `openai_compatible` → 重跑 `scripts/run_m1_eval.py`
   → 得到真实命中率后 M1 收尾，再进 M2。
+
+---
+
+## 2026-08-02 — Codex：M2-01a 认证与权限（仅后端）
+
+- **任务**：实现 Cookie 会话认证、管理员权限、用户管理和种子管理员；严格不进入知识库、
+  文档、对话/问答 API 或前端范围。
+
+- **完成**：
+  - 新增 Argon2id 密码哈希与 PyJWT 签发/校验，Token 只通过 `access_token` Cookie 下发，
+    不进入响应体；Cookie 使用 `HttpOnly`、`SameSite=Lax`，生产环境增加 `Secure`。
+  - 新增 `get_current_user` 与 `require_admin` FastAPI 依赖；缺 Cookie、过期/无效 Token、
+    用户失效统一返回 401，普通成员访问管理员接口返回 403。
+  - 实现 `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、
+    `POST /admin/users`、`GET /admin/users`，重复邮箱统一返回 409。
+  - 登录未知邮箱时仍校验固定 Argon2 哈希，使其与密码错误路径保持同一量级；两种失败响应
+    完全一致，均为 `401 {"detail":"邮箱或密码错误"}`。
+  - 从 `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` 幂等创建管理员；任一未配置时记录日志并
+    跳过，已有用户不覆盖密码。`.env.example` 保持两项为空，避免产生已知默认账户。
+  - `User.password_hash` 现有长度为 255，实测足够存 Argon2id 字符串，因此未新增无意义迁移；
+    数据库迁移仍为 `0002_document_chunks_hnsw_index (head)`。
+  - 新增认证集成测试，覆盖成功/失败登录、未知用户、缺 Cookie、过期 Token、成员 403、
+    管理员创建/重复邮箱、种子幂等、生产 Cookie `Secure` 以及所有用户响应排除密码哈希。
+  - 新增 `docs/API.md` 和 ADR-0010，记录 Cookie 相对 localStorage 的 XSS 收益、CSRF 面与
+    当前 SameSite=Lax 取舍。实际配置解析得到 4 个显式 CORS 来源，不含 `*`。
+
+- **范围确认**：未读取或修改 Claude 并行开发中的 `apps/web/`；未新增知识库 CRUD、文档管理、
+  对话或问答 API；`/demo/*` 与 `/documents/preview` 路由实现保持原样。
+
+- **运行命令与真实结果**：
+  ```text
+  cd apps/api && .venv/bin/ruff check .
+  All checks passed!
+
+  cd apps/api && .venv/bin/ruff format --check .
+  74 files already formatted
+
+  cd apps/api && .venv/bin/python -m pytest
+  85 passed, 6 warnings in 191.80s (0:03:11)
+
+  cd apps/api && .venv/bin/alembic current
+  0002_document_chunks_hnsw_index (head)
+  ```
+
+- **警告说明**：6 条均来自现有依赖的弃用提示（FastAPI TestClient/httpx、PyMuPDF SWIG
+  类型），没有测试失败或跳过。

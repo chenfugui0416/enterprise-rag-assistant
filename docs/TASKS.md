@@ -41,3 +41,9 @@
 | M1-05 | Top-K 检索 | Codex（实现）+ Claude（修复与测试） | `apps/api/app/rag/retrieval/**`, `apps/api/tests/test_retrieval_integration.py` | DONE | 真实 pgvector 集成测试 4 passed：余弦排序与分数精确匹配手工计算值、`ready` 状态过滤、阈值下推、`EXPLAIN` 确认走 `ix_document_chunks_embedding_hnsw`。全量 81 passed |
 | M1-06 | 带引用的生成 | Codex（实现）+ Claude（修正与验收） | `apps/api/app/rag/generation/**`, `apps/api/scripts/run_m1_eval.py`, `data/eval/**` | BLOCKED | 机制已验收：11 题全链路跑通、0 失败、返回结构与引用元数据完整。**效果验收待真实 embedding**——mock 为语义无关的哈希向量，9 道有依据题的相似度均低于阈值而被拒答，标记为 limited 而非 pass。配置 `EMBEDDING_API_KEY` 后重跑 `scripts/run_m1_eval.py` 即得有效命中率 |
 | M1-07 | 低置信度拒答 | Codex（实现）+ Claude（测试与验收） | `apps/api/app/rag/generation/**`, `apps/api/tests/test_generation.py` | REVIEW | 已验证：无依据问题 2/2 正确拒答、不产生引用、且完全不调用模型（防止其凭参数记忆编造企业事实）。**「有依据时不误拒」尚未验证**，需真实 embedding；阈值 0.35 为默认值，待 M4 校准 |
+
+## M2 · 可使用的全栈产品（已启动）
+
+| ID | 任务 | 负责人 | 文件范围 | 状态 | 验证 |
+|---|---|---|---|---|---|
+| M2-01a | 认证与权限（仅后端） | Codex | `apps/api/app/{api,core,schemas,services}/**`, `apps/api/tests/test_auth.py`, `.env.example`, `docs/{API,DECISIONS,SESSION_LOG}.md` | DONE | `ruff check .` 通过；`ruff format --check .` 74 files already formatted；全量 `pytest` 85 passed（真实 pgvector 可达，认证与既有数据库集成测试均实际执行）；迁移保持 `0002_document_chunks_hnsw_index (head)`；未修改 `apps/web/` 与既有演示路由 |

@@ -1,4 +1,4 @@
-"""User model; authentication routes are added in M2."""
+"""User model used by authentication and authorization routes."""
 
 import uuid
 from typing import TYPE_CHECKING

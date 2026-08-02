@@ -15,6 +15,8 @@ TEST_ENV = {
     "LLM_PROVIDER": "mock",
     "EMBEDDING_PROVIDER": "mock",
     "EMBEDDING_DIM": "64",
+    "SEED_ADMIN_EMAIL": "",
+    "SEED_ADMIN_PASSWORD": "",
 }
 
 
