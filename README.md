@@ -1,4 +1,8 @@
-# 企业级 RAG 智能助手
+# 企业级 RAG 智能助手 · enterprise-rag-assistant
+
+> 仓库名 `enterprise-rag-assistant` 直译即「企业级 RAG 助手」。
+> RAG = Retrieval-Augmented Generation，检索增强生成：先从知识库检索资料，再让模型
+> 基于检索到的资料作答，从而让答案有据可查。
 
 面向企业内部知识库的问答系统：上传文档、建立知识库、基于知识库提问，**返回带原文引用与
 来源位置的答案**；证据不足时明确拒答而非编造。
