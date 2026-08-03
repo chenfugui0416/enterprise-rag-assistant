@@ -473,3 +473,83 @@ Embedding Provider: mock
 
 - **警告说明**：6 条均来自现有依赖的弃用提示（FastAPI TestClient/httpx、PyMuPDF SWIG
   类型），没有测试失败或跳过。
+
+---
+
+## 2026-08-02 — Claude：M2-01 认证前端 + 环境重大故障排除
+
+### 一、M2-01b 认证前端（与 Codex 的后端并行开发）
+
+- 统一 HTTP 层 `src/lib/http.ts`：所有请求带 `credentials: "include"`，
+  会话走 httpOnly Cookie，JS 读不到也就无法被 XSS 窃取
+- 登录页、`AuthGuard` 路由守卫、`AppShell` 顶部导航与退出
+- 用 Next 路由组 `(app)` 隔离受保护页面，登录页不受守卫拦截
+- 实验台迁至 `/lab` 并适配外壳（移除其自带的 header 与嵌套 `<main>`），
+  其中的 API 健康指示提升到顶栏，对所有页面生效
+- `/kb`、`/chat` 为占位页，明确写出「已完成什么、还差什么、属于哪个里程碑」，
+  而不是显示假装可用的空壳
+
+### 二、对 Codex 后端认证的审查结论
+
+实现质量高，未发现可利用漏洞：
+- 登录时 `user is None` 检查在前，因此未知用户走 dummy hash 即使返回 True 也会被拒
+- Cookie 属性齐全（httpOnly / secure 随环境 / SameSite=Lax），且 logout 的
+  `delete_cookie` 参数与 set 时一致（否则删不掉）
+- `UserResponse` 不含 `password_hash`；JWT 显式指定 algorithms 并要求 exp/sub
+
+发现一处前后端契约不一致：后端 `display_name` 为 `str | None`（管理员建号时可不填），
+前端类型写成了 `string`，会渲染出 "null"。已加 `displayNameOf()` 回退到邮箱前缀。
+
+### 三、M2-01c CI 接入真实数据库
+
+认证引入后 e2e 必须有用户表，原 CI 必挂。api 与 e2e 两个 job 各挂 pgvector service，
+手工建扩展（service 容器不执行 `scripts/init-db.sql`）并执行迁移；
+前端依赖改用 `npm ci`，避免上游发新版在无关改动上炸掉构建。
+
+### 四、环境重大故障：项目位于 iCloud 同步目录
+
+**现象**：测试从 70 秒退化到 40 分钟跑不完；模块导入时快时卡（同一句 import
+有时 0.7 秒、有时超过 5 分钟）；全过程 CPU 0%；`git status` 与 `mv` 也会超时。
+
+**误判与修正**：先后怀疑过 tiktoken 需要联网下载 BPE 文件、httpx 导入慢、
+僵尸 pytest 进程。用 `faulthandler.dump_traceback_later` 转储调用栈，发现卡在
+`fastapi/__init__.py` 的纯 Python 导入上——纯 Python 导入不可能慢，由此判断是
+文件系统层面的问题。
+
+**根因**：项目位于 `~/Desktop`，而该机器的桌面在 iCloud Drive 同步范围内。
+`brctl status` 显示同步队列里正是 `.venv/site-packages` 这类海量小文件。
+iCloud 反复同步导致文件读取间歇性阻塞。
+
+**处置**：项目迁至 `~/dev/enterprise-rag-assistant`。迁移中 `mv` 跨 iCloud
+边界失败，部分文件的数据块未落地，导致 134 个文件中约一半 `cat` 报
+`Operation timed out (os error 60)`。所幸 `.git` 对象库完好，
+`git cat-file` 能完整读出内容，遂用 `git clone` 从对象库重建干净工作区，
+逐个校验 134 个文件均可读；中文文件名的 `项目交接文档.md` 单独用
+`git cat-file -p` 取出恢复。**代码零丢失**。
+
+**迁移前后对比**：
+
+| 操作 | iCloud 目录下 | ~/dev 下 |
+|---|---|---|
+| `uv venv` | 超时失败 | 0.1 秒 |
+| `npm ci` | 数分钟 | 3.6 秒 |
+| `pytest`（85 项） | 40 分钟未跑完 | 1 分 49 秒 |
+| `npm run e2e`（7 项） | 不稳定 | 19.4 秒 |
+
+**遗留建议**：`~/CLAUDE.md` 中记录的 GitHub 项目默认根目录
+`/Users/wind/Desktop/我的Git/GIthub项目` 同样位于 iCloud 同步范围内，
+其他项目会遇到同样问题，建议一并迁出或关闭桌面同步。
+
+### 五、验证结果（迁移后，真实输出）
+
+```
+后端  pytest                → 85 passed in 1:49
+后端  ruff check / format   → 通过
+前端  lint / typecheck      → 0 problems
+前端  build                 → 成功，6 个路由
+前端  npm audit             → 0 vulnerabilities
+e2e   playwright            → 7 passed in 19.4s
+```
+
+e2e 覆盖：未登录跳转、根路径守卫、登录成功、退出后会话失效，
+以及「密码错误」与「账号不存在」返回完全一致的提示（防用户枚举）。
