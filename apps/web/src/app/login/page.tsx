@@ -61,7 +61,11 @@ export default function LoginPage() {
           </div>
 
           {loginMutation.isError && (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+            <p
+              role="alert"
+              data-testid="login-error"
+              className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800"
+            >
               {loginMutation.error.message}
             </p>
           )}

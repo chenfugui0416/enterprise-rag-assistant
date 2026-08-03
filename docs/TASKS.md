@@ -47,3 +47,5 @@
 | ID | 任务 | 负责人 | 文件范围 | 状态 | 验证 |
 |---|---|---|---|---|---|
 | M2-01a | 认证与权限（仅后端） | Codex | `apps/api/app/{api,core,schemas,services}/**`, `apps/api/tests/test_auth.py`, `.env.example`, `docs/{API,DECISIONS,SESSION_LOG}.md` | DONE | `ruff check .` 通过；`ruff format --check .` 74 files already formatted；全量 `pytest` 85 passed（真实 pgvector 可达，认证与既有数据库集成测试均实际执行）；迁移保持 `0002_document_chunks_hnsw_index (head)`；未修改 `apps/web/` 与既有演示路由 |
+| M2-01b | 认证与权限（前端） | Claude | `apps/web/src/**`, `apps/web/e2e/**`, `apps/web/playwright.config.ts` | DONE | 统一 HTTP 层（`credentials: include`）、登录页、路由守卫、应用外壳与导航；实验台迁至 `/lab`，健康指示提升到顶栏；受保护路由用 Next 路由组隔离。**e2e 7 passed**，覆盖未登录跳转、登录、退出后会话失效、以及「密码错误」与「账号不存在」返回完全一致的提示 |
+| M2-01c | CI 接入真实数据库 | Claude | `.github/workflows/ci.yml` | DONE | 认证引入后 e2e 必须有用户表，原 CI 必挂。api 与 e2e 两个 job 各挂 pgvector service，手工建扩展（service 容器不执行 init-db.sql）并执行迁移；前端依赖改用 `npm ci` 精确复现 |
