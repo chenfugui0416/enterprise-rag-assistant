@@ -29,7 +29,9 @@ test("密码错误时提示且不泄露账号是否存在", async ({ page }) => 
   await page.getByLabel("密码").fill("wrong-password");
   await page.getByRole("button", { name: "登录" }).click();
 
-  const alert = page.getByRole("alert");
+  // 不能用 getByRole("alert")：Next.js 的路由播报器
+  // (#__next-route-announcer__) 同样是 role=alert，会触发 strict mode violation
+  const alert = page.getByTestId("login-error");
   await expect(alert).toBeVisible();
   await expect(alert).toHaveText("邮箱或密码错误");
 
@@ -37,7 +39,7 @@ test("密码错误时提示且不泄露账号是否存在", async ({ page }) => 
   await page.getByLabel("邮箱").fill("nobody-here@example.test");
   await page.getByLabel("密码").fill("wrong-password");
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByRole("alert")).toHaveText("邮箱或密码错误");
+  await expect(page.getByTestId("login-error")).toHaveText("邮箱或密码错误");
 });
 
 test("登录后进入知识库页并显示当前用户与角色", async ({ page }) => {

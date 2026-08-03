@@ -19,7 +19,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("实验台可加载并展示后端健康状态", async ({ page }) => {
-  await page.getByRole("link", { name: "解析实验台" }).click();
+  // 限定在导航栏内：知识库页正文也有一个指向 /lab 的同名链接，
+  // 不限定会触发 strict mode violation
+  await page.getByRole("navigation").getByRole("link", { name: "解析实验台" }).click();
 
   await expect(page).toHaveURL(/\/lab$/);
   await expect(page.getByRole("heading", { name: "文档解析与结构化切分" })).toBeVisible();
