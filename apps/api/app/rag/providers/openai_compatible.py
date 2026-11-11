@@ -5,11 +5,21 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import AsyncIterator
 
 import httpx
 
 from .base import ProviderError, ToolCall, ToolCallResult
+
+
+def _make_http_client(timeout: float) -> httpx.AsyncClient:
+    proxy = (
+        os.environ.get("https_proxy")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("http_proxy")
+    )
+    return httpx.AsyncClient(timeout=timeout, proxy=proxy, trust_env=False)
 
 
 def _redact(exc: Exception) -> str:
@@ -50,8 +60,11 @@ class OpenAICompatibleEmbeddingProvider:
         if not texts:
             return []
         vectors: list[list[float]] = []
-        headers = {"Authorization": f"Bearer {self._api_key}"}
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": "OpenCode/1.0.0",
+        }
+        async with _make_http_client(self._timeout) as client:
             for start in range(0, len(texts), self._batch_size):
                 batch = texts[start : start + self._batch_size]
                 try:
@@ -120,9 +133,12 @@ class OpenAICompatibleLLMProvider:
         return payload
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
-        headers = {"Authorization": f"Bearer {self._api_key}"}
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": "OpenCode/1.0.0",
+        }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with _make_http_client(self._timeout) as client:
                 resp = await client.post(
                     f"{self._base_url}/chat/completions",
                     headers=headers,
@@ -135,10 +151,13 @@ class OpenAICompatibleLLMProvider:
         return data["choices"][0]["message"]["content"]
 
     async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
-        headers = {"Authorization": f"Bearer {self._api_key}"}
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": "OpenCode/1.0.0",
+        }
         try:
             async with (
-                httpx.AsyncClient(timeout=self._timeout) as client,
+                _make_http_client(self._timeout) as client,
                 client.stream(
                     "POST",
                     f"{self._base_url}/chat/completions",
@@ -167,9 +186,12 @@ class OpenAICompatibleLLMProvider:
         tools: list[dict[str, object]],
     ) -> ToolCallResult:
         """带工具定义的一次生成，解析 OpenAI 兼容的 tool_calls 结构（ADR-0011）。"""
-        headers = {"Authorization": f"Bearer {self._api_key}"}
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "User-Agent": "OpenCode/1.0.0",
+        }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with _make_http_client(self._timeout) as client:
                 resp = await client.post(
                     f"{self._base_url}/chat/completions",
                     headers=headers,

@@ -208,10 +208,16 @@ async def query_demo_knowledge_base(
                 agent_steps=agent_steps,
             )
 
+        # mock embedding 下放宽默认阈值以支持真实 LLM 端到端问答与证据引用展示
+        effective_threshold = (
+            0.0
+            if (settings.embedding_provider == "mock" and request.confidence_threshold == 0.35)
+            else request.confidence_threshold
+        )
         answer = await GroundedAnswerService(
             search_service,
             get_llm_provider(),
-            confidence_threshold=request.confidence_threshold,
+            confidence_threshold=effective_threshold,
         ).answer(
             session,
             knowledge_base.id,
