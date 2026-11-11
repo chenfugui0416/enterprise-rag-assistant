@@ -65,6 +65,9 @@ test-api: ## 后端测试（默认 mock provider，无需 API Key）
 
 test: test-api ## 全部单元/集成测试
 
+benchmark: ## 执行 RAG 评测基准与 A/B 对比
+	cd $(API_DIR) && .venv/bin/python scripts/run_benchmark.py
+
 e2e-install: ## 安装 Playwright 浏览器（首次执行 e2e 前需要）
 	cd $(WEB_DIR) && npx playwright install --with-deps chromium
 

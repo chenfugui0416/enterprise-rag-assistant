@@ -34,6 +34,17 @@ class RetrievedResponse(CitationResponse):
     pass
 
 
+class ExecutionTraceResponse(BaseModel):
+    trace_id: str
+    total_duration_ms: float
+    retrieval_mode: str
+    retrieval_duration_ms: float
+    retrieved_count: int
+    top_score: float | None = None
+    llm_duration_ms: float
+    refused: bool
+
+
 class QueryResponse(BaseModel):
     question: str
     answer: str
@@ -41,3 +52,4 @@ class QueryResponse(BaseModel):
     model_name: str
     citations: tuple[CitationResponse, ...]
     retrieved: tuple[RetrievedResponse, ...]
+    execution_trace: ExecutionTraceResponse | None = None

@@ -19,10 +19,12 @@ from app.models import Document, DocumentChunk, DocumentStatus, KnowledgeBase, U
 from app.rag.embeddings import DocumentIngestionService, build_embedding_service
 from app.rag.generation import GroundedAnswerService
 from app.rag.loaders import LOADERS, DocumentParseError, load_document
+from app.rag.observability import ExecutionTracer
 from app.rag.providers.factory import get_llm_provider
 from app.rag.retrieval import MimirQSearchService, VectorSearchService
 from app.schemas.demo_rag import (
     CitationResponse,
+    ExecutionTraceResponse,
     IndexResponse,
     QueryRequest,
     QueryResponse,
@@ -149,6 +151,8 @@ async def query_demo_knowledge_base(
     if knowledge_base is None:
         raise HTTPException(status_code=404, detail="请先索引一份文档。")
     settings = get_settings()
+    retrieval_mode = "mimirq_hybrid" if settings.mimirq_enabled else "vector"
+    tracer = ExecutionTracer(retrieval_mode=retrieval_mode)
     try:
         search_service = (
             MimirQSearchService(settings)
@@ -164,6 +168,7 @@ async def query_demo_knowledge_base(
             knowledge_base.id,
             request.question,
             top_k=request.top_k,
+            tracer=tracer,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -191,6 +196,20 @@ async def query_demo_knowledge_base(
         )
         for result in answer.retrieved
     )
+    trace_resp = (
+        ExecutionTraceResponse(
+            trace_id=answer.execution_trace.trace_id,
+            total_duration_ms=answer.execution_trace.total_duration_ms,
+            retrieval_mode=answer.execution_trace.retrieval_mode,
+            retrieval_duration_ms=answer.execution_trace.retrieval_duration_ms,
+            retrieved_count=answer.execution_trace.retrieved_count,
+            top_score=answer.execution_trace.top_score,
+            llm_duration_ms=answer.execution_trace.llm_duration_ms,
+            refused=answer.execution_trace.refused,
+        )
+        if answer.execution_trace
+        else None
+    )
     return QueryResponse(
         question=answer.question,
         answer=answer.answer,
@@ -198,4 +217,5 @@ async def query_demo_knowledge_base(
         model_name=answer.model_name,
         citations=citations,
         retrieved=retrieved,
+        execution_trace=trace_resp,
     )

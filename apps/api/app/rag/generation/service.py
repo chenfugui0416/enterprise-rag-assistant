@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.rag.observability import ExecutionTrace, ExecutionTracer
 from app.rag.providers.base import LLMProvider
 from app.rag.retrieval import SearchResult, VectorSearchService
 
@@ -44,6 +46,7 @@ class AnswerResult:
     retrieved: tuple[SearchResult, ...]
     refused: bool
     model_name: str
+    execution_trace: ExecutionTrace | None = None
 
 
 class GroundedAnswerService:
@@ -69,11 +72,13 @@ class GroundedAnswerService:
         question: str,
         *,
         top_k: int = 5,
+        tracer: ExecutionTracer | None = None,
     ) -> AnswerResult:
         normalized_question = question.strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
 
+        search_start = time.perf_counter()
         retrieved = await self.search_service.search(
             session,
             knowledge_base_id,
@@ -81,8 +86,19 @@ class GroundedAnswerService:
             top_k=top_k,
             min_score=self.confidence_threshold,
         )
+        search_duration_ms = (time.perf_counter() - search_start) * 1000.0
+        if tracer:
+            top_score = retrieved[0].score if retrieved else None
+            tracer.record_retrieval(
+                duration_ms=search_duration_ms,
+                count=len(retrieved),
+                top_score=top_score,
+            )
+
         citations = tuple(Citation.from_result(result) for result in retrieved)
         if not retrieved:
+            if tracer:
+                tracer.record_llm(duration_ms=0.0, refused=True)
             return AnswerResult(
                 question=normalized_question,
                 answer=REFUSAL_ANSWER,
@@ -90,6 +106,7 @@ class GroundedAnswerService:
                 retrieved=(),
                 refused=True,
                 model_name=self.llm_provider.model_name,
+                execution_trace=tracer.finish() if tracer else None,
             )
 
         # 所有 provider 走同一条路径：若为 mock 单独分支，真实厂商用的提示词装配
@@ -111,7 +128,11 @@ class GroundedAnswerService:
                 "content": f"问题：{normalized_question}\n\n证据：\n{context}",
             },
         ]
+        llm_start = time.perf_counter()
         answer = await self.llm_provider.complete(messages)
+        llm_duration_ms = (time.perf_counter() - llm_start) * 1000.0
+        if tracer:
+            tracer.record_llm(duration_ms=llm_duration_ms, refused=False)
 
         return AnswerResult(
             question=normalized_question,
@@ -120,4 +141,5 @@ class GroundedAnswerService:
             retrieved=retrieved,
             refused=False,
             model_name=self.llm_provider.model_name,
+            execution_trace=tracer.finish() if tracer else None,
         )
