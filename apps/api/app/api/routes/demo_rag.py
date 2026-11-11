@@ -16,6 +16,7 @@ from app.api.routes.document_preview import _save_upload
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import Document, DocumentChunk, DocumentStatus, KnowledgeBase, User
+from app.rag.agent import AgentService, ToolRegistry
 from app.rag.embeddings import DocumentIngestionService, build_embedding_service
 from app.rag.generation import GroundedAnswerService
 from app.rag.loaders import LOADERS, DocumentParseError, load_document
@@ -23,6 +24,7 @@ from app.rag.observability import ExecutionTracer
 from app.rag.providers.factory import get_llm_provider
 from app.rag.retrieval import MimirQSearchService, VectorSearchService
 from app.schemas.demo_rag import (
+    AgentStepResponse,
     CitationResponse,
     ExecutionTraceResponse,
     IndexResponse,
@@ -159,6 +161,44 @@ async def query_demo_knowledge_base(
             if settings.mimirq_enabled
             else VectorSearchService(build_embedding_service(settings))
         )
+        if request.use_agent:
+            tracer = ExecutionTracer(retrieval_mode="agent_react")
+            llm = get_llm_provider()
+            registry = ToolRegistry(search_service)
+            agent = AgentService(llm, registry)
+            with tracer.span("agent_run"):
+                agent_result = await agent.run(session, knowledge_base.id, request.question)
+            trace = tracer.finish()
+            trace_resp = ExecutionTraceResponse(
+                trace_id=trace.trace_id,
+                total_duration_ms=trace.total_duration_ms,
+                retrieval_mode=trace.retrieval_mode,
+                retrieval_duration_ms=trace.retrieval_duration_ms,
+                retrieved_count=len(agent_result.steps),
+                top_score=None,
+                llm_duration_ms=trace.llm_duration_ms,
+                refused=agent_result.refused,
+            )
+            agent_steps = tuple(
+                AgentStepResponse(
+                    index=step.index,
+                    tool_name=step.tool_name,
+                    arguments=step.arguments,
+                    result=step.result,
+                )
+                for step in agent_result.steps
+            )
+            return QueryResponse(
+                question=agent_result.question,
+                answer=agent_result.answer,
+                refused=agent_result.refused,
+                model_name=agent_result.model_name,
+                citations=(),
+                retrieved=(),
+                execution_trace=trace_resp,
+                agent_steps=agent_steps,
+            )
+
         answer = await GroundedAnswerService(
             search_service,
             get_llm_provider(),
@@ -219,3 +259,12 @@ async def query_demo_knowledge_base(
         retrieved=retrieved,
         execution_trace=trace_resp,
     )
+
+
+@router.post("/agent", response_model=QueryResponse, summary="Agent 智能编排查询演示知识库")
+async def query_demo_agent(
+    request: QueryRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> QueryResponse:
+    request.use_agent = True
+    return await query_demo_knowledge_base(request, session)

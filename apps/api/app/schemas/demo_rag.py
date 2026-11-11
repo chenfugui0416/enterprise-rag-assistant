@@ -18,6 +18,7 @@ class QueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
     confidence_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    use_agent: bool = False
 
 
 class CitationResponse(BaseModel):
@@ -45,6 +46,13 @@ class ExecutionTraceResponse(BaseModel):
     refused: bool
 
 
+class AgentStepResponse(BaseModel):
+    index: int
+    tool_name: str
+    arguments: str
+    result: str
+
+
 class QueryResponse(BaseModel):
     question: str
     answer: str
@@ -53,3 +61,4 @@ class QueryResponse(BaseModel):
     citations: tuple[CitationResponse, ...]
     retrieved: tuple[RetrievedResponse, ...]
     execution_trace: ExecutionTraceResponse | None = None
+    agent_steps: tuple[AgentStepResponse, ...] | None = None

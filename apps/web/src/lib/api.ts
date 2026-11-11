@@ -67,6 +67,24 @@ export interface Citation {
   content: string;
 }
 
+export interface ExecutionTrace {
+  trace_id: string;
+  total_duration_ms: number;
+  retrieval_mode: string;
+  retrieval_duration_ms: number;
+  retrieved_count: number;
+  top_score: number | null;
+  llm_duration_ms: number;
+  refused: boolean;
+}
+
+export interface AgentStep {
+  index: number;
+  tool_name: string;
+  arguments: string;
+  result: string;
+}
+
 export interface QueryResponse {
   question: string;
   answer: string;
@@ -74,6 +92,8 @@ export interface QueryResponse {
   model_name: string;
   citations: Citation[];
   retrieved: Citation[];
+  execution_trace?: ExecutionTrace | null;
+  agent_steps?: AgentStep[] | null;
 }
 
 export { API_BASE_URL } from "./http";
@@ -106,10 +126,14 @@ export function indexDemoDocument(file: File): Promise<IndexResponse> {
   });
 }
 
-export function queryDemoKnowledgeBase(question: string, topK = 5): Promise<QueryResponse> {
+export function queryDemoKnowledgeBase(
+  question: string,
+  topK = 5,
+  useAgent = false,
+): Promise<QueryResponse> {
   return http.post<QueryResponse>(
     "/demo/query",
-    { question, top_k: topK },
+    { question, top_k: topK, use_agent: useAgent },
     { fallbackMessage: "问答请求失败" },
   );
 }
