@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
@@ -25,6 +26,24 @@ class EmbeddingProvider(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class ToolCall:
+    """模型请求调用一个工具；arguments 是原始 JSON 字符串。"""
+
+    id: str
+    name: str
+    arguments: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCallResult:
+    """带工具的一次生成结果：要么给出最终回答，要么请求调用工具。"""
+
+    content: str | None
+    tool_calls: tuple[ToolCall, ...]
+    model_name: str
+
+
 @runtime_checkable
 class LLMProvider(Protocol):
     """生成回答。"""
@@ -38,6 +57,17 @@ class LLMProvider(Protocol):
 
     def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         """流式返回增量文本片段。"""
+        ...
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]],
+    ) -> ToolCallResult:
+        """带工具定义的一次生成。
+
+        不提供工具调用能力的实现应抛 ProviderError（见 ADR-0011）。
+        """
         ...
 
 

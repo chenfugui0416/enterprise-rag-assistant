@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from .base import ProviderError
+from .base import ProviderError, ToolCall, ToolCallResult
 
 
 def _redact(exc: Exception) -> str:
@@ -101,14 +101,23 @@ class OpenAICompatibleLLMProvider:
     def model_name(self) -> str:
         return self._model
 
-    def _payload(self, messages: list[dict[str, str]], stream: bool) -> dict:
-        return {
+    def _payload(
+        self,
+        messages: list[dict[str, object]],
+        stream: bool,
+        tools: list[dict[str, object]] | None = None,
+    ) -> dict:
+        payload: dict[str, object] = {
             "model": self._model,
             "messages": messages,
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             "stream": stream,
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
         headers = {"Authorization": f"Bearer {self._api_key}"}
@@ -151,3 +160,37 @@ class OpenAICompatibleLLMProvider:
             raise
         except Exception as exc:  # noqa: BLE001
             raise ProviderError(f"streaming request failed: {_redact(exc)}") from None
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]],
+    ) -> ToolCallResult:
+        """带工具定义的一次生成，解析 OpenAI 兼容的 tool_calls 结构（ADR-0011）。"""
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=self._payload(messages, stream=False, tools=tools),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderError(f"tool-calling request failed: {_redact(exc)}") from None
+
+        message = data["choices"][0]["message"]
+        calls = tuple(
+            ToolCall(
+                id=str(raw.get("id", "")),
+                name=str(raw.get("function", {}).get("name", "")),
+                arguments=str(raw.get("function", {}).get("arguments", "")),
+            )
+            for raw in message.get("tool_calls") or ()
+        )
+        return ToolCallResult(
+            content=message.get("content"),
+            tool_calls=calls,
+            model_name=self._model,
+        )

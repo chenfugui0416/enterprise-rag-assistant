@@ -10,8 +10,11 @@ CI 也不应该依赖付费外部服务。Mock 保证同样的输入永远得到
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import AsyncIterator
+
+from app.rag.providers.base import ToolCall, ToolCallResult
 
 _STREAM_CHUNK_SIZE = 12
 
@@ -81,3 +84,35 @@ class MockLLMProvider:
         text = self._answer(messages)
         for i in range(0, len(text), _STREAM_CHUNK_SIZE):
             yield text[i : i + _STREAM_CHUNK_SIZE]
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]],
+    ) -> ToolCallResult:
+        """确定性脚本：首轮请求检索工具，拿到工具结果后给出最终回答。
+
+        这样 Agent 编排循环可以在不联网、零成本的前提下被完整断言（ADR-0011）。
+        """
+        if messages and messages[-1].get("role") == "tool":
+            tool_output = str(messages[-1].get("content", ""))
+            return ToolCallResult(
+                content=f"[mock-agent] 依据工具结果作答：{tool_output}",
+                tool_calls=(),
+                model_name=self.model_name,
+            )
+        last_user = next(
+            (str(m.get("content", "")) for m in reversed(messages) if m.get("role") == "user"),
+            "",
+        )
+        return ToolCallResult(
+            content=None,
+            tool_calls=(
+                ToolCall(
+                    id="call-1",
+                    name="search_knowledge_base",
+                    arguments=json.dumps({"query": last_user}, ensure_ascii=False),
+                ),
+            ),
+            model_name=self.model_name,
+        )
