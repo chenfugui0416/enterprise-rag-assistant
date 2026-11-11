@@ -198,3 +198,20 @@ def test_evaluator_evaluate_single_result() -> None:
     report_md = RAGEvaluator.render_comparison_markdown([summary])
     assert "# 企业级 RAG 检索策略 A/B 基准评测对比报告" in report_md
     assert "mimirq_hybrid" in report_md
+
+
+def test_query_request_schema_with_history_and_agent() -> None:
+    from app.schemas.demo_rag import ChatMessageRequest, QueryRequest
+
+    req = QueryRequest(
+        question="还有几天假？",
+        use_agent=True,
+        history=(
+            ChatMessageRequest(role="user", content="我有多少天年假？"),
+            ChatMessageRequest(role="assistant", content="你有十天年假。"),
+        ),
+    )
+    assert req.use_agent is True
+    assert len(req.history) == 2
+    assert req.history[0].role == "user"
+    assert req.history[1].content == "你有十天年假。"

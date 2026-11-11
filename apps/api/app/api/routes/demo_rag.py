@@ -6,9 +6,10 @@ import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -26,6 +27,8 @@ from app.rag.retrieval import MimirQSearchService, VectorSearchService
 from app.schemas.demo_rag import (
     AgentStepResponse,
     CitationResponse,
+    DocumentItemResponse,
+    DocumentListResponse,
     ExecutionTraceResponse,
     IndexResponse,
     QueryRequest,
@@ -161,13 +164,19 @@ async def query_demo_knowledge_base(
             if settings.mimirq_enabled
             else VectorSearchService(build_embedding_service(settings))
         )
+        history_dicts = [{"role": h.role, "content": h.content} for h in request.history]
         if request.use_agent:
             tracer = ExecutionTracer(retrieval_mode="agent_react")
             llm = get_llm_provider()
             registry = ToolRegistry(search_service)
             agent = AgentService(llm, registry)
             with tracer.span("agent_run"):
-                agent_result = await agent.run(session, knowledge_base.id, request.question)
+                agent_result = await agent.run(
+                    session,
+                    knowledge_base.id,
+                    request.question,
+                    history=history_dicts,
+                )
             trace = tracer.finish()
             trace_resp = ExecutionTraceResponse(
                 trace_id=trace.trace_id,
@@ -209,6 +218,7 @@ async def query_demo_knowledge_base(
             request.question,
             top_k=request.top_k,
             tracer=tracer,
+            history=history_dicts,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -268,3 +278,50 @@ async def query_demo_agent(
 ) -> QueryResponse:
     request.use_agent = True
     return await query_demo_knowledge_base(request, session)
+
+
+@router.get("/documents", response_model=DocumentListResponse, summary="获取演示知识库文档列表")
+async def list_demo_documents(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> DocumentListResponse:
+    kb = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.name == "演示企业知识库"))
+    if kb is None:
+        return DocumentListResponse(total=0, documents=())
+
+    stmt = (
+        select(
+            Document,
+            func.count(DocumentChunk.id).label("chunk_count"),
+        )
+        .outerjoin(DocumentChunk, Document.id == DocumentChunk.document_id)
+        .where(Document.knowledge_base_id == kb.id)
+        .group_by(Document.id)
+        .order_by(Document.created_at.desc())
+    )
+    rows = await session.execute(stmt)
+    docs = tuple(
+        DocumentItemResponse(
+            id=doc.id,
+            filename=doc.filename,
+            status=doc.status.value,
+            chunk_count=int(cnt or 0),
+            size_bytes=doc.size_bytes,
+            mime_type=doc.mime_type,
+            created_at=doc.created_at.isoformat(),
+        )
+        for doc, cnt in rows
+    )
+    return DocumentListResponse(total=len(docs), documents=docs)
+
+
+@router.delete("/documents/{document_id}", status_code=204, summary="删除演示知识库文档")
+async def delete_demo_document(
+    document_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    doc = await session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document_id))
+    await session.delete(doc)
+    await session.commit()

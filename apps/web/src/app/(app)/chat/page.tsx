@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { queryDemoKnowledgeBase, QueryResponse } from "@/lib/api";
+import { HistoryMessage, queryDemoKnowledgeBase, QueryResponse } from "@/lib/api";
 
 interface ChatMessage {
   id: string;
@@ -45,7 +45,8 @@ export default function ChatPage() {
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
 
   const chatMutation = useMutation({
-    mutationFn: (questionText: string) => queryDemoKnowledgeBase(questionText, 5, useAgent),
+    mutationFn: ({ questionText, history }: { questionText: string; history: HistoryMessage[] }) =>
+      queryDemoKnowledgeBase(questionText, 5, useAgent, history),
     onSuccess: (data) => {
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -69,9 +70,14 @@ export default function ChatPage() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
     };
 
+    const historyPayload: HistoryMessage[] = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    chatMutation.mutate(q);
+    chatMutation.mutate({ questionText: q, history: historyPayload });
   };
 
   const toggleCitation = (msgId: string) => {

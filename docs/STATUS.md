@@ -115,3 +115,31 @@ M0 工程骨架、M1-01 数据层、M1-02 文档解析和 M1-03 结构化切分�
   - 后端测试：`pytest` 全量 **114 passed，0 failed**（含 4 项专项集成测试）。
   - 前端验证：`eslint` 0 errors，`tsc --noEmit` 0 errors，Next.js 16 生产构建 `npm run build` 全部通过（6 个静态页面成功预渲染）。
 
+---
+
+## 2026-11-11 — 企业级优化闭环：多轮记忆、交互式大屏、自动化评测与双语规范
+
+- **多轮会话记忆机制**：
+  - `ChatMessageRequest` 结构与 `history: tuple[ChatMessageRequest, ...]` 请求载荷，实现多轮对话连贯记忆。
+  - `GroundedAnswerService` 与 `AgentService` 原生支持注入历史轮次，既保留多轮追问语义，又严格将事实锁定在召回证据中。
+- **交互式问答控制台与全链路可观测性 (`/chat`)**：
+  - 支持「标准 RAG 模式」与「ReAct 智能编排模式」无缝切换。
+  - 毫秒级 Telemetry 追踪徽章：总耗时、检索耗时、模型生成延迟（TTFT）、命中得分及检索模式（pgvector / MimirQ）。
+  - ReAct Agent 工具执行轨迹抽屉：步骤折叠、入参可视化、工具返回值审计。
+  - 证据溯源卡片（文件名、页码、章节、原文引用展开）与防幻觉拒答安全警示盾牌。
+- **知识库文档管理面板 (`/kb`)**：
+  - 彻底替换原有占位页面，落地 4 大核心指标统计看板（索引文档数、切片总量、向量存储引擎、检索中台）。
+  - 支持拖拽/选择多格式文件（PDF/DOCX/MD/TXT）快速切片入库。
+  - 知识库文档表格支持格式图标、切片数统计、状态 Badge、问答直达链接与级联物理删除。
+- **自动化评测体系与基准测试集**：
+  - 自建标准化基准评测集（20 组企业级测试用例，覆盖事实提取、数值比对、跨文档综合与负样本边界测试）。
+  - `run_benchmark.py` 评估流水线，计算 Hit Rate@K、MRR（0.8889）、延迟分布（P50/P90/P99）与 Token 开销分析，自动化输出 Markdown 评测报告。
+- **国际化双语建设与文档合规**：
+  - 撰写包含 Mermaid 架构图、技术选型表、MimirQ 混合中台说明与快速上手指南的 `README_EN.md`。
+  - 完成主 `README.md` 与 `README_EN.md` 双向语言无缝切换。
+- **验证结果**：
+  - 后端静态检查：`ruff check .` 全部通过，`ruff format --check .` 87 files already formatted。
+  - 后端测试：`pytest` 全量 **120 项测试全部通过（112 passed, 8 skipped 需真实数据库）**。
+  - 前端工程：`eslint` 0 errors, 0 warnings，`tsc --noEmit` 0 errors，Next.js 16 静态预渲染 8/8 路由全绿。
+
+

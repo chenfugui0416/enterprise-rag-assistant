@@ -85,6 +85,26 @@ export interface AgentStep {
   result: string;
 }
 
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface DocumentItem {
+  id: string;
+  filename: string;
+  status: string;
+  chunk_count: number;
+  size_bytes: number;
+  mime_type: string;
+  created_at: string;
+}
+
+export interface DocumentListResponse {
+  total: number;
+  documents: DocumentItem[];
+}
+
 export interface QueryResponse {
   question: string;
   answer: string;
@@ -130,10 +150,23 @@ export function queryDemoKnowledgeBase(
   question: string,
   topK = 5,
   useAgent = false,
+  history: HistoryMessage[] = [],
 ): Promise<QueryResponse> {
   return http.post<QueryResponse>(
     "/demo/query",
-    { question, top_k: topK, use_agent: useAgent },
+    { question, top_k: topK, use_agent: useAgent, history },
     { fallbackMessage: "问答请求失败" },
   );
+}
+
+export function fetchDemoDocuments(): Promise<DocumentListResponse> {
+  return http.get<DocumentListResponse>("/demo/documents", {
+    fallbackMessage: "获取文档列表失败",
+  });
+}
+
+export function deleteDemoDocument(documentId: string): Promise<void> {
+  return http.delete(`/demo/documents/${documentId}`, {
+    fallbackMessage: "删除文档失败",
+  });
 }

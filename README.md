@@ -1,3 +1,5 @@
+[English](README_EN.md) | [简体中文](README.md)
+
 # 企业级 RAG 智能助手 · enterprise-rag-assistant
 
 > 仓库名 `enterprise-rag-assistant` 直译即「企业级 RAG 助手」。

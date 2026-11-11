@@ -14,11 +14,32 @@ class IndexResponse(BaseModel):
     duplicate: bool = False
 
 
+class ChatMessageRequest(BaseModel):
+    role: str
+    content: str
+
+
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
     confidence_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
     use_agent: bool = False
+    history: tuple[ChatMessageRequest, ...] = Field(default_factory=tuple)
+
+
+class DocumentItemResponse(BaseModel):
+    id: UUID
+    filename: str
+    status: str
+    chunk_count: int
+    size_bytes: int
+    mime_type: str
+    created_at: str
+
+
+class DocumentListResponse(BaseModel):
+    total: int
+    documents: tuple[DocumentItemResponse, ...]
 
 
 class CitationResponse(BaseModel):
