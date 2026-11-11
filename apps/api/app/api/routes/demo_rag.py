@@ -20,7 +20,7 @@ from app.rag.embeddings import DocumentIngestionService, build_embedding_service
 from app.rag.generation import GroundedAnswerService
 from app.rag.loaders import LOADERS, DocumentParseError, load_document
 from app.rag.providers.factory import get_llm_provider
-from app.rag.retrieval import VectorSearchService
+from app.rag.retrieval import MimirQSearchService, VectorSearchService
 from app.schemas.demo_rag import (
     CitationResponse,
     IndexResponse,
@@ -150,8 +150,13 @@ async def query_demo_knowledge_base(
         raise HTTPException(status_code=404, detail="请先索引一份文档。")
     settings = get_settings()
     try:
+        search_service = (
+            MimirQSearchService(settings)
+            if settings.mimirq_enabled
+            else VectorSearchService(build_embedding_service(settings))
+        )
         answer = await GroundedAnswerService(
-            VectorSearchService(build_embedding_service(settings)),
+            search_service,
             get_llm_provider(),
             confidence_threshold=request.confidence_threshold,
         ).answer(

@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     embedding_dim: int = 1024
     embedding_batch_size: int = 32
 
+    # ---- MimirQ 微服务中台接入（路线 B）----
+    mimirq_enabled: bool = False
+    mimirq_base_url: str = "http://127.0.0.1:8000"
+    mimirq_username: str = "admin"
+    mimirq_password: str = "AdminPassword123!"
+    mimirq_dataset_id: str = "2b30cca0-7e31-4893-83bd-75544b33f13c"
+    mimirq_timeout_seconds: float = 30.0
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

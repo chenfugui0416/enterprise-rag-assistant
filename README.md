@@ -7,11 +7,12 @@
 面向企业内部知识库的问答系统：上传文档、建立知识库、基于知识库提问，**返回带原文引用与
 来源位置的答案**；证据不足时明确拒答而非编造。
 
-> **当前状态：M1 最小 RAG 闭环已完成，M2-01a 认证与权限（后端）已完成**
-> 已可上传文档、建库、检索并生成带引用的答案；登录与管理员权限已就绪。
-> 尚未接入真实模型效果指标（默认 mock provider），Agent 与工具调用尚未开始。
-> 详细的能力边界与已验证结果见 [`docs/STATUS.md`](docs/STATUS.md)。
-> 本 README 中的所有命令均已在本机实际执行过。
+> **当前状态：M1 最小 RAG 闭环、M2 全栈认证/权限与 Agent 编排层、M3 MimirQ 检索中台集成已全部就绪**
+> - 已可上传文档、建库、切片检索并生成带引用的答案；登录认证、时序对齐防枚举与管理员权限全栈打通。
+> - 具备自主 Agent 手写编排循环与 AST 安全求值工具（ADR-0011）。
+> - 具备 MimirQ 工业级混合检索中台微服务接入能力（BM25 + 向量召回 + Rerank 重排序，ADR-0012）。
+> - 详细能力边界与全量 114 项验证结果见 [`docs/STATUS.md`](docs/STATUS.md)。
+> - 本 README 中的所有命令均已在本机实际执行并通过。
 
 ## 技术栈
 
@@ -20,6 +21,7 @@
 | 前端 | Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · TanStack Query |
 | 后端 | Python 3.13 · FastAPI · Pydantic v2 · pydantic-settings |
 | 数据 | PostgreSQL 17 + pgvector + pg_trgm · Redis 7 |
+| 检索中台 | 原生 pgvector 向量检索 + MimirQ 混合检索中台（BM25/Vector/Reranker，微服务解耦） |
 | 模型 | OpenAI 兼容 API（SiliconFlow / DeepSeek / vLLM 等）+ 内置 Mock |
 | 测试 | pytest · Playwright · ruff · ESLint · tsc |
 | 交付 | Docker 多阶段构建 · Docker Compose · GitHub Actions |
@@ -33,6 +35,14 @@
 - 带引用生成：答案附原文出处（文档、页码、标题上下文），可回溯到具体切片。
 - **无依据拒答**：检索证据不足时明确拒答，不编造企业事实。
 - 前端「文档实验台」：上传 → 解析预览 → 切分结果 → 带引用问答的完整链路。
+- **MimirQ 混合检索中台集成（路线 B）**：支持通过 `MIMIRQ_ENABLED=true` 环境变量一键接入开源企业检索中台 MimirQ，获得 BM25 + Dense Vector + Cross-Encoder Rerank 混合召回与证据胶囊回溯能力，支持与本地 pgvector 检索平滑热切换（见 ADR-0012）。
+
+### Agent 工具调用与手写编排
+
+- 协议扩展：`LLMProvider` 协议增加 `complete_with_tools`，解耦业务逻辑与模型厂商 API（ADR-0011）。
+- 手写编排循环：受控循环上限（默认 4 步）、寒暄判定短路、工具执行异常转换为可读反馈。
+- 安全计算器工具：使用 Python `ast` 白名单求值（仅允许算术四则运算与括号），严防代码注入。
+- 确定性 Mock 驱动：支持零成本、离线、确定性断言整个 Agent 工具调用全生命周期。
 
 ### 认证与权限
 

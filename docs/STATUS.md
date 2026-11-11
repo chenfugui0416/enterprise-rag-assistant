@@ -88,3 +88,30 @@ M0 工程骨架、M1-01 数据层、M1-02 文档解析和 M1-03 结构化切分�
 - 真实数据库集成测试已覆盖解析、切分、向量化、入库、余弦检索、幂等重处理和失败回滚；数据库不可达时按 fixture 探测跳过。
 - 当前能力边界推进到“内部服务可完成向量入库”；M1-05 Top-K 检索服务和 M1-06 生成链路仍未实现。
 - 验证结果：`ruff check .` 通过，`ruff format --check .` 58 files already formatted，`pytest` 全量 62 passed。
+
+---
+
+## 2026-10-10 — M2 Agent 层（M2-01~03）
+
+- 新增 `app/rag/agent/`：`tools.py`（`search_knowledge_base` / `get_document_meta` / `calculator`）
+  与 `service.py`（手写编排循环：检索分支 → 工具调用 → 带引用回答；步数上限 4，超限显式拒答）。
+- `LLMProvider` 协议扩展 `complete_with_tools`；`openai_compatible` 解析 OpenAI 兼容
+  `tool_calls`；`mock` 提供确定性脚本（首轮请求检索、随后作答），因此 Agent 链路无需 API Key 即可测。
+- 安全：`calculator` 用 AST 白名单求值，拒绝属性访问、下标、函数调用、字符串常量与除零。
+- 验证：`pytest` 102 passed / 8 skipped；`ruff check` 与 `ruff format --check` 全绿。
+- 未完成：M2-04 API 端点与 M2-05 前端思考链路可视化——需要真实模型 Key 才能端到端联调
+  （当前 `EMBEDDING_API_KEY` 为空、`LLM_API_KEY` 所在账号余额不足）。
+
+---
+
+## 2026-11-11 — MimirQ 企业级检索中台接入（路线 B）
+
+- 新增 `app/rag/retrieval/mimirq_client.py`：封装异步客户端 `MimirQClient`，支持 JWT 鉴权与时效缓存复用、401 失效重试、混合检索代理（`/api/v1/rag/retrieve`）与文档代理上传（`/api/v1/documents/upload`）。
+- 新增 `app/rag/retrieval/mimirq_service.py`：实现 `MimirQSearchService`，无缝适配既有检索契约（`search(...) -> tuple[SearchResult, ...]`），将 MimirQ 丰富 Citations 映射为不可变 `SearchResult`。
+- 配置中心扩展：在 `Settings` 中新增 `mimirq_enabled` 开关及连接参数，`/demo/query` 路由支持根据环境变量在本地 pgvector 检索与 MimirQ 混合检索之间平滑热切换。
+- 架构决策记录：编写并归档 [ADR-0012](DECISIONS.md#adr-0012-mimirq-企业级检索中台接入路线-b微服务解耦集成)。
+- 验证结果：
+  - 后端静态检查：`ruff check .` 全部通过，`ruff format --check .` 82 files already formatted。
+  - 后端测试：`pytest` 全量 **114 passed，0 failed**（含 4 项专项集成测试）。
+  - 前端验证：`eslint` 0 errors，`tsc --noEmit` 0 errors，Next.js 16 生产构建 `npm run build` 全部通过（6 个静态页面成功预渲染）。
+

@@ -49,3 +49,27 @@
 | M2-01a | 认证与权限（仅后端） | Codex | `apps/api/app/{api,core,schemas,services}/**`, `apps/api/tests/test_auth.py`, `.env.example`, `docs/{API,DECISIONS,SESSION_LOG}.md` | DONE | `ruff check .` 通过；`ruff format --check .` 74 files already formatted；全量 `pytest` 85 passed（真实 pgvector 可达，认证与既有数据库集成测试均实际执行）；迁移保持 `0002_document_chunks_hnsw_index (head)`；未修改 `apps/web/` 与既有演示路由 |
 | M2-01b | 认证与权限（前端） | Claude | `apps/web/src/**`, `apps/web/e2e/**`, `apps/web/playwright.config.ts` | DONE | 统一 HTTP 层（`credentials: include`）、登录页、路由守卫、应用外壳与导航；实验台迁至 `/lab`，健康指示提升到顶栏；受保护路由用 Next 路由组隔离。**e2e 7 passed**，覆盖未登录跳转、登录、退出后会话失效、以及「密码错误」与「账号不存在」返回完全一致的提示 |
 | M2-01c | CI 接入真实数据库 | Claude | `.github/workflows/ci.yml` | DONE | 认证引入后 e2e 必须有用户表，原 CI 必挂。api 与 e2e 两个 job 各挂 pgvector service，手工建扩展（service 容器不执行 init-db.sql）并执行迁移；前端依赖改用 `npm ci` 精确复现 |
+
+## M2 Agent 层（进行中）
+
+| 任务 | 产出 | 状态 | 验证 |
+|---|---|---|---|
+| M2-01 Provider 协议支持 tool calling | `app/rag/providers/base.py`（`ToolCall`/`ToolCallResult`/`complete_with_tools`）、`openai_compatible.py`、`mock.py` | DONE | `pytest tests/test_providers.py`；Mock 确定性脚本驱动循环 |
+| M2-02 Agent 工具层 | `app/rag/agent/tools.py`（3 工具 + JSON Schema + 参数校验） | DONE | `pytest tests/test_agent_tools.py`（算术安全求值、错误回传、Schema 形状） |
+| M2-03 Agent 编排循环 | `app/rag/agent/service.py`（检索分支、工具循环、步数上限拒答、寒暄短路） | DONE | `pytest tests/test_agent_service.py`（4 组断言） |
+| M2-04 Agent API 端点 | `app/api/routes/` 新增 agent 问答端点 | TODO | 待真实模型 Key 后联调 |
+| M2-05 前端思考链路可视化 | 前端展示每步工具调用与引用 | TODO | 依赖 M2-04 |
+
+> 说明：M2-01~03 在 Mock Provider 下全链路可测（`pytest` 102 passed / 0 failed，`ruff` 全绿）。
+> M2-04/05 需要真实模型 Key 才能端到端验证，故标记 TODO。
+
+## M3 MimirQ 企业级中台集成（路线 B）
+
+| 任务 | 产出 | 状态 | 验证 |
+|---|---|---|---|
+| M3-01 MimirQ 异步客户端与 JWT 缓存 | `app/rag/retrieval/mimirq_client.py`（登录、时效缓存、重试、检索代理、文档上传） | DONE | `pytest tests/test_mimirq_integration.py`（Token 复用与重试） |
+| M3-02 检索协议适配层 | `app/rag/retrieval/mimirq_service.py`（`MimirQSearchService` 映射 `SearchResult`） | DONE | `pytest tests/test_mimirq_integration.py`（字段与评分完整映射） |
+| M3-03 路由集成与热切换 | `apps/api/app/core/config.py`、`apps/api/app/api/routes/demo_rag.py` | DONE | `MIMIRQ_ENABLED` 开关支持热切换 |
+| M3-04 架构决策与测试集 | `docs/DECISIONS.md` (ADR-0012)、`tests/test_mimirq_integration.py` | DONE | 全量 `pytest` 114 passed；`ruff check` 与 `format` 全绿 |
+
+

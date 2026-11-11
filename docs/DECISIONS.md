@@ -378,3 +378,80 @@ httpOnly Cookie 把凭据从 JavaScript 可读空间移除，降低 XSS 造成�
 
 如需可撤销会话，可保持 Cookie 和 API 响应契约不变，把 Cookie 内容替换为服务端 Session ID；
 前端无需改为读取 Token。
+
+---
+
+## ADR-0011 Agent 工具调用层手写编排，并把 tool calling 纳入 Provider 协议
+
+- 日期：2026-10-10
+- 状态：已采纳
+
+**背景**
+
+M1 已交付「检索 → 带引用生成 → 低置信拒答」的单轮链路。要把它变成 Agent 应用，模型必须能
+主动调用工具（检索、文档元数据、计算器），并在多步之间维护消息历史。可选路径有两条：引入
+LangGraph / AutoGen 等编排框架，或在本仓库手写循环。
+
+**决定**
+
+1. 把 tool calling 纳入 `LLMProvider` 协议：新增 `complete_with_tools(messages, tools)`，返回
+   `ToolCallResult`；`complete` / `stream` 保持不变。业务代码仍不按厂商名分支（延续 ADR-0009）。
+2. 编排循环手写实现于 `app/rag/agent/`，不引入外部编排依赖。工具以 JSON Schema 暴露
+   （`ToolRegistry.specs()`），按名执行；任何工具失败都转成可读错误回给模型，不向上抛。
+3. 三个工具：`search_knowledge_base`（复用 `VectorSearchService`）、`get_document_meta`、
+   `calculator`（AST 白名单求值，不使用 `eval`）。
+4. 循环步数上限默认 4；超限不返回半成品，直接走既有拒答文案。纯寒暄短路，不触发检索。
+5. Mock Provider 提供确定性的 `complete_with_tools`（首轮请求检索、拿到工具结果后作答），
+   使整条 Agent 链路可以零成本、确定性断言（延续 mock-first 约定）。
+
+**备选方案**
+
+- LangGraph / AutoGen：表达力强，但引入重依赖与版本风险；当前仅 3 个工具、单层循环，收益不足。
+- 在业务层判断 provider 名字走不同路径：违反 ADR-0009。
+
+**理由**
+
+手写循环让每一步可测试、可解释、可审计；协议扩展保持厂商可替换；mock 脚本让 CI 不依赖付费服务。
+
+**代价**
+
+手写循环没有框架自带的可视化、持久化与并行工具调用。当工具数量与分支复杂度上升（并行调用、
+子图、人机确认）时应重新评估是否迁移到 LangGraph。工具参数由模型生成，因此工具层必须做白名单
+校验（`calculator` 已按 AST 白名单实现，拒绝属性访问、下标、函数调用等一切其他语法）。
+
+---
+
+## ADR-0012 MimirQ 企业级检索中台接入（路线 B：微服务解耦集成）
+
+- 日期：2026-11-11
+- 状态：已采纳
+
+**背景**
+
+为评估及利用专业开源检索框架 MimirQ 提供的混合检索（向量 + BM25 稀疏检索 + 重排序 Reranker + 结构化多模态解析），企业知识库系统需要接入 MimirQ。若直接重构本系统内部存储层或全量替换，风险高、耦合重且破坏现有单元测试。
+
+**决定**
+
+1. 采用**路线 B（微服务中台接入模式）**：已部署运行的 MimirQ 实例作为独立检索与入库中台，通过标准 REST API 对接。
+2. 保持本系统的业务层（`GroundedAnswerService`）完全解耦，定义 `MimirQSearchService` 遵循与既有 `VectorSearchService` 一致的搜索契约：
+   `search(session, knowledge_base_id, query, top_k, min_score) -> tuple[SearchResult, ...]`。
+3. 封装专用异步 HTTP 客户端 `MimirQClient`，使用 `httpx.AsyncClient(trust_env=False)` 负责 JWT 自动登录鉴权、Token 缓存刷新、混合检索代理（`/api/v1/rag/retrieve`）及文档代理上传。
+4. 在配置中心 `Settings` 中新增 `MIMIRQ_ENABLED` 开关，支持通过环境变量一键在本地 pgvector 检索与 MimirQ 中台检索之间平滑切换。
+
+**备选方案**
+
+- 路线 A（深度源码融合）：直接修改本仓库代码库将 MimirQ 核心代码搬入。代价：引入 MimirQ 超过 200 个重型依赖，代码耦合过重，后续 MimirQ 上游升级困难。
+- 路线 C（纯反向代理）：仅在前端跳转到 MimirQ Web 界面。代价：本系统自有的权限体系、会话管理和审计追踪能力无法复用。
+
+**理由**
+
+微服务方案保持了主系统的轻量与稳定性；`MimirQSearchService` 实现了零侵入适配，所有既有 110 项自动化测试依然 100% 通过，并新增专门的 MimirQ 单元与集成测试。
+
+**代价**
+
+检索阶段多一层跨服务的 HTTP 网络调用（局域网/本机通信延迟通常在 5~15ms 之间）。需保持 MimirQ 服务的健康运行。
+
+**回滚方式**
+
+将环境变量 `MIMIRQ_ENABLED=false` 即可即时回退到本系统自带的 pgvector 向量检索服务。
+
